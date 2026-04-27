@@ -49,4 +49,7 @@ Your partner is the NAVIGATOR, who provides planning and quality assurance. You 
 - **Notebook serialization**: In `.ipynb` JSON, code cell sources must use actual line breaks in the array format (e.g., `["x = 1\n", "y = 2\n"]`). Never emit a single string containing literal backslash-n characters (e.g., `"x = 1\ny = 2"`), which causes `SyntaxError: unexpected character after line continuation character`.
 - **Python string hygiene**: Never include raw newline characters inside double-quoted Python strings in code cells.
 - **Focused analysis**: Only include analyses and plots directly required by the current goal. Avoid gratuitous supplementary statistics (e.g., full PSD for every goal) that increase token usage without serving the stated scientific question.
+- **Multi-monitor `sim.run()`**: When multiple monitors are configured, unpack the output into one `(time, data)` pair per monitor: `(t1, y1), (t2, y2) = sim.run(...)`. A single `(t, y)` assignment will fail or silently drop data.
+- **Stimulus weight shape**: Use explicit indexing (e.g., `stim_weights[[35, 36], 0] = numpy.array([v1, v2])`) to avoid NumPy broadcasting mismatches.
+- **Epileptor focality**: If using the Epileptor model, define a focal epileptogenic zone by setting elevated `x0` in a small subset of regions (e.g., V1/V2) while keeping the surround at interictal values. Never apply a uniform or random `x0` across all regions.
 - If stuck for >2 turns, ask navigator for a simpler intermediate step

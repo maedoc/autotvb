@@ -1,0 +1,12 @@
+=== Autoresearch Loop ===
+Goal: benchmarks/goals/tutorial_s6_modelingepilepsy.GOAL.md
+Iterations: 5
+Max turns: 5
+
+
+=== Iteration 1 ===
+[TRIAL] Running trial...
+[SCORE] Iteration 1: 2.75
+  Multiple fatal API and runtime errors (nonexistent monitors.iEEG, incompatible NumPy shape assignmen
+[MUTATE] Generating mutation plan...
+[MUTATE] Applying mutations...

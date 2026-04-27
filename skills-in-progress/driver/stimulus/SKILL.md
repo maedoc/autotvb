@@ -8,7 +8,8 @@ description: Define and configure stimuli in TVB. Use when applying external inp
 ## Region Stimulus Pattern
 ```python
 stim_weights = numpy.zeros((conn.number_of_regions, 1))
-stim_weights[nodes] = numpy.array([3.5, 0.0])[:, numpy.newaxis]  # shape must match
+# Explicit indexing avoids shape-mismatch surprises
+stim_weights[[35, 36], 0] = numpy.array([3.5, 0.0])
 
 eqn_t = equations.PulseTrain()
 eqn_t.parameters["onset"] = 500.0  # ms
