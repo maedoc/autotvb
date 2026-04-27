@@ -39,4 +39,7 @@ Your partner is the NAVIGATOR, who provides planning and quality assurance. You 
 - Always `configure()` TVB objects before simulation
 - Use default connectivity unless goal says otherwise
 - Include brief markdown comments explaining parameter choices
+- Before reporting completion, visually inspect every code cell for syntax validity and remove any stray concatenated statements or empty-string fragments
+- Keep prose descriptions and code values **identical** (e.g. if markdown says `amp = 1e-3`, the code must literally set `1e-3`)
+- Shape `nsig` to the model's number of state variables (e.g. `numpy.array([v, v])` for Generic2dOscillator's 2 variables)
 - If stuck for >2 turns, ask navigator for a simpler intermediate step

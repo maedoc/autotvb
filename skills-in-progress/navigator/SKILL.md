@@ -28,6 +28,8 @@ When reviewing driver output, verify:
 3. Is monitor period compatible with integrator dt?
 4. Is stimulus onset > 0 and stimulus tau reasonable?
 5. Are plots labeled and do they address the scientific question?
+6. Does `noise.Additive(nsig=...)` have one element per model state variable (e.g. 2 for Generic2dOscillator)?
+7. Do parameter values in markdown prose exactly match the literal values in the corresponding code cells?
 
 ## Planning Template
 For any scientific question, produce:

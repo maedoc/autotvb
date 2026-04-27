@@ -27,7 +27,7 @@ model = models.Generic2dOscillator(a=numpy.array([-0.5]), b=numpy.array([-15.0])
 coup = coupling.Linear(a=numpy.array([0.0154]))
 
 # 4. Integrator
-hiss = noise.Additive(nsig=numpy.array([0.015]))
+hiss = noise.Additive(nsig=numpy.array([0.015, 0.015]))
 heunint = integrators.HeunStochastic(dt=2**-6, noise=hiss)
 
 # 5. Monitors
@@ -53,6 +53,8 @@ sim.configure()
 - **Monitor period mismatch**: `period` must be an integer multiple of `dt`.
 - **Array wrapping**: Parameters must be numpy arrays, even for scalars: `numpy.array([value])`.
 - **Region numbering**: Default connectivity has 76 regions. V1/V2 are usually regions 35, 36.
+- **Noise `nsig` shape**: `noise.Additive(nsig=...)` needs one element per model state variable. Generic2dOscillator requires `numpy.array([σ, σ])`, not a scalar or length-1 array.
+- **Prose/code drift**: If markdown says "amp = 1e-3", the code block must literally set `amp` to `1e-3`, not `0.5`.
 
 ## Stimulus Definition
 ```python

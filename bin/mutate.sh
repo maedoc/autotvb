@@ -50,7 +50,8 @@ $EVAL
 Write your improvement plan now.
 EOF
 
-pi --mode text --no-session --tools read,edit -p "$MUTATE_PROMPT" > sandbox/mutation_plan.md
+mkdir -p "$LOG_DIR"
+pi --mode text --no-session --tools read,edit -p "$MUTATE_PROMPT" > "$LOG_DIR/mutation_plan.md"
 
-echo "Mutation plan written to sandbox/mutation_plan.md"
-cat sandbox/mutation_plan.md
+echo "Mutation plan written to $LOG_DIR/mutation_plan.md"
+cat "$LOG_DIR/mutation_plan.md"
