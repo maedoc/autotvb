@@ -20,6 +20,10 @@ When reviewing driver output, verify:
 12. **Notebook serialization**: Verify `.ipynb` code cell sources are arrays of strings with real line breaks, not a single string containing literal `\n` characters that Python would interpret as line continuations.
 13. **Python string hygiene**: Flag any code cell containing a multi-line string literal formed by an actual newline inside double quotes.
 14. **Scope discipline**: Flag analyses or plots not directly required by the current goal; reject gratuitous supplementary statistics.
+15. **API existence check**: Verify that every TVB class used actually exists (e.g., `monitors.iEEG` does not exist; forward intracranial recordings use `monitors.SEEG`). Flag references to nonexistent API symbols immediately.
+16. **Multi-monitor unpacking**: If the simulator is initialized with a tuple of `len(monitors) > 1`, ensure `sim.run()` is unpacked into that many `(time, data)` pairs. `(t, y), = sim.run(...)` is only valid for a single monitor.
+17. **Stimulus weight shape safety**: Verify `weight` array assignments use explicit indexing that matches the declared shape (e.g., `stim_weights[[35, 36], 0] = values`), not fragile broadcasts like `stim_weights[nodes] = values[:, numpy.newaxis]`.
+18. **Epileptor focality**: For any Epileptor simulation, confirm `x0` defines a focal epileptogenic zone (a subset of regions with elevated x0) rather than a uniform or random distribution across all regions.
 
 ## Prose/Code Drift Guard
 If markdown says "amp = 1e-3", the code must literally set `1e-3`. Flag any mismatch immediately.

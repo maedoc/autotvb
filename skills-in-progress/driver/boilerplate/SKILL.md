@@ -43,7 +43,11 @@ sim = simulator.Simulator(
 sim.configure()
 
 # 7. Run
+# Single monitor
 (t, y), = sim.run(simulation_length=1e3)
+
+# Multiple monitors — unpack one (time, data) tuple per monitor
+# (t_raw, y_raw), (t_eeg, y_eeg) = sim.run(simulation_length=1e3)
 ```
 
 ## Critical Rules

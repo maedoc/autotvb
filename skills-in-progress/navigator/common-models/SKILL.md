@@ -28,7 +28,7 @@ description: Quick-reference vocabulary for TVB neural-mass models, connectivity
 ## Monitors
 - `TemporalAverage` — raw state-variable average
 - `Bold` — BOLD/fMRI HRF convolution
-- `EEG`, `MEG`, `iEEG` — forward-modeled sensor signals
+- `EEG`, `MEG`, `SEEG` — forward-modeled sensor signals (intracranial / stereo-EEG uses `SensorsInternal`)
 
 ## Stimuli
 - `StimuliRegion` — point stimulation on regions

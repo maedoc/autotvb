@@ -42,4 +42,5 @@ mon_eeg = monitors.EEG(
 ## Key Points
 - Surface simulations are slower than region simulations; keep `simulation_length` moderate when testing.
 - Make sure `region_mapping` file matches the connectivity region count.
-- Forward monitors (`EEG`, `MEG`, `iEEG`) require both sensors and projection matrix files.
+- Forward monitors (`EEG`, `MEG`, `SEEG`) require both sensors and projection matrix files.
+- `monitors.iEEG` does not exist; use `monitors.SEEG` with `SensorsInternal`.

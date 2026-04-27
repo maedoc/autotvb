@@ -26,6 +26,9 @@ Do not accept regime claims from parameter tables alone. Require empirical verif
 - Inspect the time-series amplitude envelope: sustained = limit cycle; decaying = stable spiral.
 - If the driver claims "N Hz", the PSD peak must agree within ±1 Hz.
 
+## Focal Parameterization for Seizure Models
+- **Epileptor focal zone**: Do not apply a uniform or randomly distributed `x0` across all regions. The Epileptor requires a focal epileptogenic zone (a small subset of regions with elevated x0, e.g., -1.6) embedded in a surround of more negative x0 (e.g., -2.4 to -2.5). Flag any non-focal x0 parameterization as scientifically invalid.
+
 ## Windowing & Stimulus-Locked Analysis
 - **Burn-in must be shorter than stimulus onset**: Flag immediately if burn-in ≥ onset (e.g., 1000 ms burn-in with 500 ms onset). The evoked response must remain in the data.
 - **Align analysis windows with the scientific question**: For stimulus-propagation studies, FC and spectral analyses should target `[onset, onset + window]`, not arbitrary post-burn-in intervals.
