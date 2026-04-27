@@ -17,6 +17,9 @@ When reviewing driver output, verify:
 9. **Burn-in vs. stimulus timing**: If a stimulus is used, flag any burn-in window that reaches or exceeds the stimulus onset (e.g., 1000 ms burn-in with 500 ms onset). The evoked response must remain in the data.
 10. **Analysis window alignment**: For stimulus-propagation goals, verify FC / PSD is computed on a post-stimulus window, not the full trace or an arbitrary post-burn-in interval.
 11. **Regime verification**: If the driver claims a specific Hz regime or dynamical state (e.g., "stable spiral", "10 Hz limit cycle"), confirm the computed PSD or amplitude envelope supports it.
+12. **Notebook serialization**: Verify `.ipynb` code cell sources are arrays of strings with real line breaks, not a single string containing literal `\n` characters that Python would interpret as line continuations.
+13. **Python string hygiene**: Flag any code cell containing a multi-line string literal formed by an actual newline inside double quotes.
+14. **Scope discipline**: Flag analyses or plots not directly required by the current goal; reject gratuitous supplementary statistics.
 
 ## Prose/Code Drift Guard
 If markdown says "amp = 1e-3", the code must literally set `1e-3`. Flag any mismatch immediately.

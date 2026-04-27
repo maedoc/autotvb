@@ -32,19 +32,13 @@ cp "$GOAL_FILE" "$TRIAL_DIR/GOAL.md"
 cat > "$NAVIGATOR_MSG" << 'NAVINIT'
 ## Status: planning
 
-## Step-by-step Plan
-1. Set up imports and connectivity
-2. Configure Generic2dOscillator in stable spiral regime (10 Hz)
-3. Define V1/V2 stimulus with PulseTrain
-4. Configure HeunStochastic integrator with low noise
-5. Run simulation, record temporal average
-6. Plot time series highlighting evoked response
-7. Validate output addresses the scientific question
+I have read the goal below. I will now create a step-by-step plan and then instruct the driver to implement it.
+
+## Goal
+$(cat "$GOAL_FILE")
 
 ## Next Action for Driver
-Create a new notebook `workflow.ipynb` implementing steps 1–3 above. 
-Use the default 76-region connectivity. Target regions 35 (V1) and optionally 36 (V2).
-Stimulus: onset 500ms, tau 5ms. Integrator dt = 2**-6.
+Read the goal in $TRIAL_DIR/GOAL.md and create a new notebook $RESULT_NOTEBOOK that implements the expected output. Do NOT execute it yet; report what you plan to implement.
 NAVINIT
 
 # ─── Build base prompts ──────────────────────────────────────────

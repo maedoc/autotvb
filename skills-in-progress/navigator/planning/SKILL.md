@@ -21,4 +21,5 @@ For any scientific question, produce:
 - Be explicit: name TVB classes, expected figure types, key parameters.
 - Prioritize scientific validity over code polish.
 - Keep initial plans under 400 tokens; add detail in review turns.
+- Do not request supplementary analyses (e.g., full PSD, global FC, extra monitors) unless the goal explicitly requires them; keep the workflow minimal and focused.
 - If the driver is stuck for >2 turns, suggest a simpler intermediate step.
