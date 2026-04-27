@@ -11,19 +11,20 @@ TRIAL_DIR="${3:-sandbox}"
 mkdir -p "$TRIAL_DIR"
 
 # ─── Discover skills ───────────────────────────────────────────────
-# Find all SKILL.md files and convert to --skill flags
 SKILL_FLAGS=""
 while IFS= read -r skill_md; do
     skill_dir=$(dirname "$skill_md")
     SKILL_FLAGS="$SKILL_FLAGS --skill $skill_dir"
 done < <(find skills-in-progress -name 'SKILL.md' | sort)
 
-echo "[SKILLS] Loaded:$(echo $SKILL_FLAGS | sed 's/--skill/\n  -/g')"
+echo "[SKILLS] Loaded: $(echo "$SKILL_FLAGS" | tr '\n' ' ')"
 
 # ─── Conversation state ────────────────────────────────────────────
 NAVIGATOR_MSG="$TRIAL_DIR/NAVIGATOR_MESSAGE.md"
 DRIVER_MSG="$TRIAL_DIR/DRIVER_MESSAGE.md"
 RESULT_NOTEBOOK="$TRIAL_DIR/workflow.ipynb"
+EXEC_LOG="$TRIAL_DIR/exec.log"
+EXEC_REPORT="$TRIAL_DIR/EXECUTION_REPORT.md"
 
 # Seed first navigator message
 cp "$GOAL_FILE" "$TRIAL_DIR/GOAL.md"
@@ -47,33 +48,91 @@ Stimulus: onset 500ms, tau 5ms. Integrator dt = 2**-6.
 NAVINIT
 
 # ─── Build base prompts ──────────────────────────────────────────
-DRIVER_PROMPT="$(cat prompts/driver/role.md)"
+DRIVER_PROMPT="$(cat prompts/driver/role.md)
+
+IMPORTANT ENVIRONMENT NOTE:
+- TVB is installed in a Python venv at /tmp/tvb_env.
+- Before executing any TVB code, run: source /tmp/tvb_env/bin/activate
+- If TVB import fails, activate the venv first.
+- Do NOT execute the notebook inside the same pi turn that writes it. Write first, then wait for execution results."
 NAVIGATOR_PROMPT="$(cat prompts/navigator/role.md)"
+
+# ─── Helper: execute notebook locally ──────────────────────────────
+execute_notebook() {
+    local nb="$1"
+    local out="$2"
+    if [ ! -f "$nb" ]; then
+        echo "NOTEBOOK MISSING" > "$out"
+        return 1
+    fi
+    (
+        source /tmp/tvb_env/bin/activate
+        python3 -m nbconvert --ExecutePreprocessor.timeout=180 --to notebook \
+            --execute "$nb" \
+            --output "${nb%.ipynb}_executed.ipynb" \
+            2>> "$out"
+    ) || true
+    echo "--- Execution finished at $(date -Iseconds) ---" >> "$out"
+}
 
 # Turn loop
 for turn in $(seq 1 "$MAX_TURNS"); do
     echo ""
     echo "--- Turn $turn ---"
 
-    # DRIVER turn
-    echo "[DRIVER] Running..."
+    # ─── DRIVER WRITE turn ─────────────────────────────────────────
+    echo "[DRIVER] Writing notebook..."
     DRIVER_OUTPUT=$(pi \
         --mode text \
         --no-session \
         --tools read,bash,write,edit \
         $SKILL_FLAGS \
         --system-prompt "$DRIVER_PROMPT" \
-        -p "NAVIGATOR MESSAGE:\n$(cat $NAVIGATOR_MSG)\n\nYour task: implement or extend the notebook in $RESULT_NOTEBOOK inside $TRIAL_DIR. After writing, execute it and report results to me." \
+        -p "NAVIGATOR MESSAGE:\n$(cat $NAVIGATOR_MSG)\n\nYour task: implement or extend the notebook in $RESULT_NOTEBOOK inside $TRIAL_DIR. After writing the notebook, do NOT execute it. Instead, report what you wrote, what changed, and any concerns." \
         2>&1 || true)
     echo "$DRIVER_OUTPUT" > "$DRIVER_MSG"
 
-    # Check for TERMINATE from driver (unlikely, but possible)
+    # Check for TERMINATE from driver
     if grep -q "TERMINATE" "$DRIVER_MSG" 2>/dev/null; then
         echo "[DRIVER] requested TERMINATE"
         break
     fi
 
-    # NAVIGATOR turn
+    # ─── LOCAL EXECUTION ──────────────────────────────────────────
+    echo "[EXEC] Running notebook with TVB venv..."
+    > "$EXEC_LOG"
+    execute_notebook "$RESULT_NOTEBOOK" "$EXEC_LOG"
+
+    # Build execution report
+    EXEC_STATUS="Success"
+    if grep -qi "error\|traceback\|exception" "$EXEC_LOG" 2>/dev/null; then
+        EXEC_STATUS="Error"
+    fi
+
+    cat > "$EXEC_REPORT" <<EOF
+## Execution Status
+$EXEC_STATUS
+
+## Log
+$(cat "$EXEC_LOG" 2>/dev/null | tail -100)
+
+## Next Action
+If Error: fix the notebook. If Success: verify outputs are correct.
+EOF
+
+    # ─── DRIVER FIX/REPORT turn ──────────────────────────────────
+    echo "[DRIVER] Reviewing execution results..."
+    DRIVER_OUTPUT=$(pi \
+        --mode text \
+        --no-session \
+        --tools read,bash,write,edit \
+        $SKILL_FLAGS \
+        --system-prompt "$DRIVER_PROMPT" \
+        -p "NAVIGATOR MESSAGE:\n$(cat $NAVIGATOR_MSG)\n\nYOUR PREVIOUS DRIVER MESSAGE:\n$(cat $DRIVER_MSG)\n\nEXECUTION REPORT:\n$(cat $EXEC_REPORT)\n\nYour task: fix any errors in $RESULT_NOTEBOOK, or if execution succeeded, confirm completion. Report results." \
+        2>&1 || true)
+    echo "$DRIVER_OUTPUT" > "$DRIVER_MSG"
+
+    # ─── NAVIGATOR turn ──────────────────────────────────────────
     echo "[NAVIGATOR] Running..."
     NAVIGATOR_OUTPUT=$(pi \
         --mode text \
@@ -85,14 +144,12 @@ for turn in $(seq 1 "$MAX_TURNS"); do
         2>&1 || true)
     echo "$NAVIGATOR_OUTPUT" > "$NAVIGATOR_MSG"
 
-    # Check for TERMINATE from navigator
     if grep -q "TERMINATE" "$NAVIGATOR_MSG" 2>/dev/null; then
         echo "[NAVIGATOR] TERMINATE received after turn $turn"
         break
     fi
 done
 
-# Summarize
 echo ""
 echo "=== Trial complete ==="
 echo "Notebook: $RESULT_NOTEBOOK"
