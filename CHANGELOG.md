@@ -34,3 +34,35 @@ Monolithic skills limited the granularity of evolution. By allowing the mutator 
 ### Next steps
 - Test generalization on other goals (resting-state, epilepsy).
 - Consider whether token_efficiency can be improved (currently 4/5).
+
+## 2026-04-27 — Trial 4: Generalization to Epilepsy
+
+### Setup
+- Goal: `tutorial_s6_modelingepilepsy.GOAL.md` (Epileptor model, 6 state variables, heterogeneous x0, seizure propagation metrics)
+- Branch: `trial-4-epilepsy`
+- Skills: same multi-skill architecture from trial 3
+
+### Results
+- **Score**: 3.50 (correctness=3, code_quality=4, scientific_validity=3, token_efficiency=4)
+- **Turns**: 2
+- **Execution**: succeeded after driver self-repair of malformed JSON `\n` in notebook source strings
+
+### Generalization gap
+| Goal | Score | Notes |
+|---|---|---|
+| visual_erp | **4.75** | regime verification + windowing fixes clearly helped |
+| epilepsy | **3.50** | ~1.25 point drop on harder goal |
+
+### What the evaluator wanted
+1. **Seizure-propagation metrics** (not just generic FC/PSD) — the Epileptor-specific analysis skill is missing.
+2. **Broadcasting bug claim** — evaluator flagged a stimulus weight assignment bug, though execution succeeded after driver fix. Likely a false positive from nbconvert output parsing.
+
+### New learning
+7. **Goal-specific analysis skills are needed.** Visual-ERP fixes (windowing, regime verification) don't transfer to epilepsy because the required post-hoc analyses are totally different: seizure count, propagation velocity, ictal/interictal ratio, etc. The mutator should spawn a goal-specific analysis skill when it detects a novel task type.
+
+### New learning
+8. **Driver can self-repair malformed notebooks.** The first write produced literal `\n` inside JSON source strings; the driver diagnosed and fixed this in its review turn without navigator intervention. This resilience is valuable.
+
+### Next steps
+- Run mutator on trial 4 evaluation to generate Epileptor-specific analysis skill.
+- Then re-test epilepsy to close the 1.25 point gap.
