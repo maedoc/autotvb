@@ -63,6 +63,30 @@ Monolithic skills limited the granularity of evolution. By allowing the mutator 
 ### New learning
 8. **Driver can self-repair malformed notebooks.** The first write produced literal `\n` inside JSON source strings; the driver diagnosed and fixed this in its review turn without navigator intervention. This resilience is valuable.
 
+## 2026-04-27 — Infrastructure: Mutation Pipeline + Batch System
+
+### What changed
+- **Added `bin/apply_mutation.sh`** — Parses structured JSON mutation plans and applies edits mechanically (edit/create/delete/append).
+- **Redesigned `bin/mutate.sh`** — Now instructs the mutation agent to output ONLY JSON, with a strict schema. Extractor uses balanced-brace parsing to robustly extract the JSON block.
+- **Added `bin/run_batch.sh`** — Parallel baseline sweep across all goals, with concurrency control via `wait -n` semaphore.
+- **Added `bin/autoresearch.sh`** — Minimal autonomous mutation loop: trial → evaluate → mutate → apply → validate → keep/revert.
+- **Fixed `run_trial.sh` hardcoded seed** — Replaced visual-ERP-specific `NAVINIT` with goal-agnostic seed that lets the navigator derive a plan from the goal itself.
+- **Created `skills-in-progress/driver/notebook-format/SKILL.md`** — Addresses the `\n` serialization bug where notebook code cells contained literal backslash-n characters instead of real newlines.
+
+### New learning
+9. **Structured JSON mutations are necessary for automation.** The mutator can produce valid JSON plans consistently when given a strict schema. Human-readable markdown plans are insufficient for unattended application.
+10. **Balanced-brace extraction beats regex for JSON extraction.** A naive `\{.*?\}` regex fails on nested braces inside string values. A simple depth-counter (`{` depth++, `}` depth--) correctly isolates the outermost JSON object.
+11. **The seed message must be goal-agnostic.** Hardcoding a visual-ERP plan biases every goal toward Generic2dOscillator + V1/V2 stimulus. Replacing it with "read the goal and create a plan" gives ~3.5 on average but transfers to any goal.
+
+### Batch system findings (preliminary)
+| Goal | Score | Correctness | Code Quality | Scientific Validity | Token Efficiency |
+|---|---|---|---|---|---|
+| analyze_power_spectra | 3.50 | 4 | 4 | 2 | 4 |
+| compare_connectivity_normalization | 3.25 | 2 | 3 | 3 | 5 |
+
+The batch is running; more results will be collected overnight.
+
 ### Next steps
-- Run mutator on trial 4 evaluation to generate Epileptor-specific analysis skill.
-- Then re-test epilepsy to close the 1.25 point gap.
+- Let batch complete overnight (~2 hrs remaining with 2 workers).
+- Run `autoresearch.sh` on epilepsy goal (3.50 → target 4.75) to test full autonomous pipeline.
+- Based on batch results, identify which dimensions need skill-level mutations per goal type.
