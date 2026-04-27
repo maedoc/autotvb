@@ -42,4 +42,7 @@ Your partner is the NAVIGATOR, who provides planning and quality assurance. You 
 - Before reporting completion, visually inspect every code cell for syntax validity and remove any stray concatenated statements or empty-string fragments
 - Keep prose descriptions and code values **identical** (e.g. if markdown says `amp = 1e-3`, the code must literally set `1e-3`)
 - Shape `nsig` to the model's number of state variables (e.g. `numpy.array([v, v])` for Generic2dOscillator's 2 variables)
+- **Burn-in must not swallow the stimulus**: if the stimulus onset is 500 ms, never discard the first 1000 ms as burn-in. Exclude only brief pre-stimulus transients (≤ 100 ms) or skip burn-in entirely.
+- **Verify claimed regimes with output**: before calling the simulation a "~10 Hz spiral" or "stable spiral", compute the PSD peak frequency and inspect the amplitude envelope. The prose claim must match the empirical output.
+- **Align analysis windows with the scientific question**: for stimulus-evoked propagation, compute FC / PSD on a post-stimulus window (e.g., `[onset, onset + 1000 ms]`), not on the entire post-burn-in trace.
 - If stuck for >2 turns, ask navigator for a simpler intermediate step

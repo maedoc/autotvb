@@ -1,2 +1,3 @@
 {"trial":1,"baseline":true,"mutated":false,"goal":"visual_erp.GOAL.md","correctness":2,"code_quality":3,"scientific_validity":3,"token_efficiency":3,"scalar_score":2.75,"turns":3}
 {"trial":2,"baseline":false,"mutated":true,"goal":"visual_erp.GOAL.md","correctness":3,"code_quality":4,"scientific_validity":3,"token_efficiency":4,"scalar_score":3.5,"turns":4}
+{"trial":3,"baseline":false,"mutated":true,"goal":"visual_erp.GOAL.md","correctness":5,"code_quality":5,"scientific_validity":5,"token_efficiency":4,"scalar_score":4.75,"turns":2}
