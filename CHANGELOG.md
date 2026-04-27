@@ -16,7 +16,13 @@ Monolithic skills limited the granularity of evolution. By allowing the mutator 
 ### Current best score
 - Baseline (trial 1): 2.75 on `visual_erp.GOAL.md`
 - Post-mutation (trial 2): 3.50 on `visual_erp.GOAL.md`
+- Multi-skill + targeted mutation (trial 3): **4.75** on `visual_erp.GOAL.md`
+
+### Trial 3 results
+- **Score**: 4.75 (correctness=5, code_quality=5, scientific_validity=5, token_efficiency=4)
+- **Turns**: 2 (down from 4)
+- **Key improvement**: Scientific validity jumped from 2→5 by addressing burn-in windowing, regime verification, and stimulus-locked analysis.
 
 ### Next steps
-- Run trial 3 with multi-skill architecture.
-- Evaluate whether splitting skills improved correctness or token efficiency.
+- Test generalization on other goals (resting-state, epilepsy).
+- Consider whether token_efficiency can be improved (currently 4/5).
