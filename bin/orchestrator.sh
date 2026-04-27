@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # orchestrator.sh — Proper autoresearch outer loop for navigator/driver evolution
+# Now supports multiple skills: mutator can create/split/merge/delete skills.
 cd "$(dirname "$0")/.."
 
 # ─── Session Files ─────────────────────────────────────────────────
@@ -22,15 +23,12 @@ BEST_BRANCH="main"
 PROMPT_DIR="prompts"
 SKILL_DIR="skills-in-progress"
 
-# Candidate files that may be mutated (one per iteration)
-MUTATION_TARGETS=(
-    "$PROMPT_DIR/navigator/role.md"
-    "$PROMPT_DIR/driver/role.md"
-    "$SKILL_DIR/navigator/SKILL.md"
-    "$SKILL_DIR/driver/SKILL.md"
-)
-
 # ─── Helpers ───────────────────────────────────────────────────────
+discover_targets() {
+    # Find all .md files under prompts/ and skills-in-progress/
+    find "$PROMPT_DIR" "$SKILL_DIR" -type f -name '*.md' | sort
+}
+
 init_session() {
     if [ -f "$SESSION_JSONL" ]; then
         echo "=== Resuming from existing session ==="
@@ -66,9 +64,15 @@ log_event() {
 }
 
 pick_mutation_target() {
-    # Cycle through targets deterministically, one per iteration
-    local idx=$(( ($1 - 1) % ${#MUTATION_TARGETS[@]} ))
-    echo "${MUTATION_TARGETS[$idx]}"
+    # Pick deterministically but from the dynamically-discovered set
+    local targets=($(discover_targets))
+    local n=${#targets[@]}
+    if [ "$n" -eq 0 ]; then
+        echo ""
+        return
+    fi
+    local idx=$(( ($1 - 1) % n ))
+    echo "${targets[$idx]}"
 }
 
 compute_fitness() {
@@ -110,6 +114,10 @@ while true; do
 
     # 2. Pick and mutate ONE target
     TARGET_FILE=$(pick_mutation_target "$ITERATION")
+    if [ -z "$TARGET_FILE" ]; then
+        echo "[ERROR] No mutation targets found. Exiting."
+        break
+    fi
     TARGET_NAME=$(basename "$TARGET_FILE")
     echo "[MUTATE] Target: $TARGET_FILE"
     
