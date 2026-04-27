@@ -18,6 +18,14 @@ Monolithic skills limited the granularity of evolution. By allowing the mutator 
 - Post-mutation (trial 2): 3.50 on `visual_erp.GOAL.md`
 - Multi-skill + targeted mutation (trial 3): **4.75** on `visual_erp.GOAL.md`
 
+### Key Learnings
+1. **Multi-skill architecture enables surgical mutations.** When the mutator can target a specific sub-skill (e.g. `scientific-validity`) rather than appending to a monolithic blob, improvements are precise and composable.
+2. **Execution must be decoupled from the LLM agent.** Writing + executing + reporting in a single `pi` call caused timeouts. The write → local exec → review pipeline is fast and reliable.
+3. **Scientific validity was the bottleneck, not correctness.** Trial 3 proved the notebooks were already mechanically correct (proper API calls, `configure()`, noise shape). The gap was in *analysis choices* — windowing, regime claims, aligning computations with the scientific question.
+4. **The mutator needs explicit authority.** The mutation agent correctly diagnosed all failures once we gave it permission (in `mutate.sh`) to edit, create, split, merge, and delete skills — not just tweak existing files in place.
+5. **Venv awareness matters.** The driver didn't know TVB lived in `/tmp/tvb_env` without an explicit note in the system prompt. Adding "IMPORTANT ENVIRONMENT NOTE" to the driver prompt solved import failures.
+6. **Output/Claim drift guards work.** Adding explicit checklist items like "if prose claims 10 Hz, the PSD peak must agree within 1 Hz" directly raised scientific_validity from 2 to 5.
+
 ### Trial 3 results
 - **Score**: 4.75 (correctness=5, code_quality=5, scientific_validity=5, token_efficiency=4)
 - **Turns**: 2 (down from 4)
