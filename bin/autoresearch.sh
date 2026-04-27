@@ -62,7 +62,7 @@ with open('$SESSION', 'w') as f:
     # ─── Mutate ──────────────────────────────────────────────────
     if awk "BEGIN {exit !($SCORE >= 4.0)}"; then
         echo "[SKIP] Score $SCORE >= 4.0, skipping mutation."
-        git checkout main
+        git checkout -f main
         git branch -D "$BRANCH" 2>/dev/null || true
         continue
     fi
@@ -77,7 +77,7 @@ with open('$SESSION', 'w') as f:
         git commit -m "[autoresearch-$iter] mutator scored $SCORE, applied mutations" || true
     else
         echo "[MUTATE] No mutation plan produced."
-        git checkout main
+        git checkout -f main
         git branch -D "$BRANCH" 2>/dev/null || true
         continue
     fi
@@ -99,12 +99,12 @@ with open('$SESSION', 'w') as f:
         echo "[KEEP] Improvement! $SCORE -> $NEW_SCORE"
         BEST_SCORE="$NEW_SCORE"
         BEST_BRANCH="$BRANCH"
-        git checkout main
+        git checkout -f main
         git merge --no-ff "$BRANCH" -m "[autoresearch-$iter] keep: $SCORE -> $NEW_SCORE" || true
         NO_IMPROVE=0
     else
         echo "[REVERT] No improvement."
-        git checkout main
+        git checkout -f main
         git branch -D "$BRANCH" 2>/dev/null || true
         NO_IMPROVE=$((NO_IMPROVE + 1))
     fi
