@@ -3,23 +3,23 @@ set -euo pipefail
 
 # evaluate.sh — Independent LLM evaluation of a trial notebook
 echo "=== Evaluator ==="
+
 NOTEBOOK="${1:-sandbox/workflow.ipynb}"
 GOAL="${2:-benchmarks/goals/visual_erp.GOAL.md}"
-TRIAL_DIR="$(dirname "$NOTEBOOK")"
+TRIAL_DIR="$(dirname "$(realpath "$NOTEBOOK")")"
 RESULT_FILE="${3:-$TRIAL_DIR/evaluation.json}"
+
+GOAL_TEXT=$(cat "$GOAL")
 
 # Convert notebook to script for inspection
 NB_SCRIPT="$TRIAL_DIR/workflow.py"
-python -m nbconvert --to script "$NOTEBOOK" --output "$NB_SCRIPT" 2>/dev/null || true
+python -m nbconvert --to script "$NOTEBOOK" >/dev/null 2>&1 || true
 
-# Count tokens consumed (from driver messages if available)
-TOKENS="unknown"
-if [ -f "$TRIAL_DIR/DRIVER_MESSAGE.md" ]; then
-    TOKENS=$(grep -oiE '[0-9]+ tokens|[0-9]+ token' "$TRIAL_DIR/DRIVER_MESSAGE.md" | grep -oE '[0-9]+' | head -1 || echo "unknown")
+# nbconvert may produce workflow.py.py if --output was used, so resolve
+if [ ! -f "$NB_SCRIPT" ] && [ -f "$TRIAL_DIR/workflow.py.py" ]; then
+    NB_SCRIPT="$TRIAL_DIR/workflow.py.py"
 fi
 
-# Build evaluation prompt
-GOAL_TEXT=$(cat "$GOAL")
 NB_TEXT=$(if [ -f "$NB_SCRIPT" ]; then cat "$NB_SCRIPT"; else echo "NOTEBOOK NOT FOUND"; fi)
 
 read -r -d '' EVAL_PROMPT <<EOF || true
