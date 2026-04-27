@@ -14,6 +14,7 @@ For any scientific question, produce:
 5. **Integration**: Deterministic vs stochastic; dt; noise level
 6. **Monitors**: What to record and at what sampling rate
 7. **Analysis / plots**: Expected visualizations
+   - Explicitly state whether each analysis is **stimulus-locked** (time-locked to onset) or **ongoing / baseline**.
 8. **Termination criteria**: How to know the simulation succeeded
 
 ## Rules

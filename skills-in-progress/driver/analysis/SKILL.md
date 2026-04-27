@@ -40,3 +40,24 @@ plt.xlim(0, 50)
 - Always label axes and add titles.
 - If the scientific question asks about a specific frequency band, restrict the plot to that range.
 - Report quantitative summaries (peak frequency, mean FC, etc.) in the markdown cell before the plot.
+
+## Burn-in & Stimulus-Aligned Windows
+```python
+# WRONG: discards the evoked response
+post_burn = y[t > 1000]
+
+# CORRECT: keep stimulus onset; analyze the evoked window
+stim_onset = 500.0
+evoked_mask = (t >= stim_onset) & (t < stim_onset + 1000.0)
+ts_evoked = y[evoked_mask, 0, :, 0].squeeze()
+fc_evoked = numpy.corrcoef(ts_evoked.T)
+```
+
+## Regime Verification
+```python
+from scipy import signal
+# Verify a claimed "~10 Hz spiral" before writing the prose
+freqs, psd = signal.welch(ts[:, node], fs=1000.0/monitors[0].period, nperseg=256)
+peak_freq = freqs[numpy.argmax(psd)]
+# Report peak_freq in the markdown; only then assert the regime.
+```

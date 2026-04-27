@@ -65,11 +65,13 @@ execute_notebook() {
         echo "NOTEBOOK MISSING" > "$out"
         return 1
     fi
+    local nb_abs="$(realpath "$nb")"
+    local out_nb="$(dirname "$nb_abs")/$(basename "${nb%.ipynb}_executed.ipynb")"
     (
         source /tmp/tvb_env/bin/activate
         python3 -m nbconvert --ExecutePreprocessor.timeout=180 --to notebook \
-            --execute "$nb" \
-            --output "${nb%.ipynb}_executed.ipynb" \
+            --execute "$nb_abs" \
+            --output "$out_nb" \
             2>> "$out"
     ) || true
     echo "--- Execution finished at $(date -Iseconds) ---" >> "$out"

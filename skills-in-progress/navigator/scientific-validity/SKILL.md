@@ -19,3 +19,14 @@ description: Assess whether TVB parameter choices, model selection, and analysis
 - Is coupling strength appropriate for the model and connectivity density?
 - Does the analysis match the data type? (BOLD for resting-state FC, TemporalAverage for ERP latencies)
 - Are statistical comparisons using appropriate null models or surrogates?
+
+## Regime Verification
+Do not accept regime claims from parameter tables alone. Require empirical verification in the notebook:
+- Compute PSD and report the dominant peak frequency.
+- Inspect the time-series amplitude envelope: sustained = limit cycle; decaying = stable spiral.
+- If the driver claims "N Hz", the PSD peak must agree within ±1 Hz.
+
+## Windowing & Stimulus-Locked Analysis
+- **Burn-in must be shorter than stimulus onset**: Flag immediately if burn-in ≥ onset (e.g., 1000 ms burn-in with 500 ms onset). The evoked response must remain in the data.
+- **Align analysis windows with the scientific question**: For stimulus-propagation studies, FC and spectral analyses should target `[onset, onset + window]`, not arbitrary post-burn-in intervals.
+- **Distinguish intrinsic vs. evoked FC**: ongoing oscillations produce structurally-driven FC; a post-stimulus window may show propagation. The driver must state which is being reported.
