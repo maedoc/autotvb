@@ -120,7 +120,60 @@ The batch is running; more results will be collected overnight.
 - Goal-agnostic seed: scores ~3.5-4.0 baseline on diverse goals
 - Overnight batch: running with 2 workers, targeting all 20 goals
 
-### Remaining questions for tomorrow
-- Will the 20-goal batch complete overnight with 2 workers (~2-3 hours)?
-- Which goals score below 3.0? Those need targeted mutations.
-- Is the duplicate process issue causing file corruption?
+## 2026-04-28 — Batch Sweep Results (20 goals, 2 workers, 5 turns)
+
+### Results summary
+**Completed: 17 / 20 goals evaluated | Average: 3.78 / 5.00**
+
+| Goal | Score | CN | CQ | SV | TE |
+|---|---|---|---|---|---|
+| tutorial_s1_region_simulation | **4.50** | 4 | 5 | 4 | 5 |
+| using_your_own_connectivity | **4.50** | 5 | 5 | 4 | 4 |
+| tutorial_s3_exploring_a_model | **4.25** | 5 | 4 | 3 | 5 |
+| tutorial_s5_modelingrestingstatenetworks | **4.25** | 4 | 4 | 4 | 5 |
+| interacting_with_allen | **4.00** | 4 | 4 | 4 | 4 |
+| compare_connectivity_normalization | **4.00** | 4 | 4 | 4 | 4 |
+| analyze_power_spectra | **4.00** | 4 | 5 | 3 | 4 |
+| tutorial_s2_surface_simulation | **3.75** | 3 | 4 | 3 | 5 |
+| tutorial_s6_modelingepilepsy | **3.75** | 2 | 4 | 4 | 5 |
+| simulate_region_stimulus | **3.75** | 4 | 3 | 4 | 4 |
+| simulate_region_jansen_rit | **3.75** | 4 | 4 | 3 | 4 |
+| simulate_reduced_wong_wang | **3.75** | 3 | 4 | 4 | 4 |
+| multiple_stimuli | **3.75** | 4 | 4 | 2 | 5 |
+| stochastic_simulation | **3.50** | 2 | 4 | 3 | 5 |
+| exploring_the_bold_monitor | **3.25** | 3 | 4 | 2 | 4 |
+| simulate_surface_seeg_eeg_meg | **3.00** | 2 | 3 | 3 | 4 |
+| surface_stochastic | **2.50** | 2 | 3 | 2 | 3 |
+| skewed_fc | **FAILED** (driver hung, never wrote notebook) |
+| tutorial_s4_evokedresponsesinthevisualcortex | **EMPTY EVAL** (context limit) |
+| visual_erp | **IN PROGRESS** |
+
+### Dimension breakdown
+| Dimension | Average | # Times Weakest |
+|---|---|---|
+| Correctness | **3.47** | **10 / 17** |
+| Code Quality | 4.00 | 1 / 17 |
+| Scientific Validity | 3.29 | 6 / 17 |
+| Token Efficiency | **4.35** | 0 / 17 |
+
+### New learning
+12. **Tutorial goals excel; surface/SEEG goals struggle.** Tutorial goals (tutorial_s1, s3, s5) scored 4.25-4.50. Surface/SEEG goals (surface_stochastic, simulate_surface_seeg_eeg_meg) scored 2.50-3.00. The driver is missing Cortex/mesh/SpatialAverage/eeg-cap skills.
+
+13. **`sim.run()` generator bug is the #1 correctness killer.** `sim.run()` returns a generator, not `(t, y)` tuples. Notebooks unpacking it directly crash. Affects tutorial_s1, stochastic_simulation, simulate_surface_seeg_eeg_meg.
+
+14. **Wrong Simulator constructor args** (`conduction_speed`, `simulation_length`) passed directly to `Simulator()` instead of `Connectivity()`. Affects multiple goals.
+
+15. **`evaluate.sh` fails on large notebooks** when the nbconvert output exceeds the evaluator's context window. The `tutorial_s4` notebook produced an empty evaluation.json (1 byte). Need truncation.
+
+16. **skewed_fc driver hung** — the driver wrote 5 lines of batch.log then stopped. No `workflow.ipynb` was ever created. The driver got stuck in an unproductive loop.
+
+17. **Token efficiency is excellent (4.35 avg).** The multi-skill architecture and concise seed message produce compact, focused notebooks. No mutation needed here.
+
+### Next steps
+See PLAN.md for prioritized action items.
+
+### Remaining questions
+- Can we get surface/SEEG goals above 3.5 with targeted API skills?
+- Will fixing `sim.run()` generator pattern raise all correctness scores by ~0.5?
+- Can the evaluator handle truncation gracefully without losing nuance?
+- What's causing the skewed_fc driver hang — context window exhaustion?

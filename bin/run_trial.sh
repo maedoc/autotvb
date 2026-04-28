@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 # run_trial.sh — Single navigator/driver trial
 # Usage: run_trial.sh GOAL_FILE [MAX_TURNS] [TRIAL_DIR]
