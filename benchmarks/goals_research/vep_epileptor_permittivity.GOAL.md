@@ -27,7 +27,7 @@ Implement the Virtual Epileptic Patient (VEP) model for temporal-lobe epilepsy u
 - Configure three monitors with `period=1.0` ms:
   - `monitors.TemporalAverage(period=1.0)`
   - `monitors.EEG` (with default sensors and region mapping)
-  - `monitors.SEEG` (with default sensors and region mapping)
+  - `monitors.iEEG` (intracranial EEG forward solution, default sensors `seeg_588.txt`)
 - Set state variables to track as `variables_of_interest = [0, 2]` (LFP = x2-x1, and slow permittivity y2).
 
 ### 4. Simulation

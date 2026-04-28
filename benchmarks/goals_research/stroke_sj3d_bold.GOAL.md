@@ -13,13 +13,13 @@ Implement a personalized whole-brain model of stroke recovery using the Stefanes
 - Set `conn.speed = numpy.array([4.0])` and call `conn.configure()`.
 
 ### 2. Local Model
-- Use `models.StefanescuJirsa3D()` (or `models.SJ3D()` depending on TVB version).
-- The SJ3D model parameters are:
+- Use `models.ReducedSetHindmarshRose()` (this is the TVB 2.x equivalent of the Stefanescu-Jirsa 3D model used in Falcon et al. 2016).
+- The model parameters are:
   - `a=1.0, b=3.0, c=1.0, d=5.0` (fast ion channel constants)
   - `r=0.006` (slower ion channel constant)
   - `s=4.0` (bursting strength)
   - Default coupling parameters within the local model: `K11`, `K12`, `K21` (to be explored)
-- If `StefanescuJirsa3D` is unavailable in the installed TVB version, use `models.Generic2dOscillator()` as a placeholder but explicitly note this limitation in the notebook and justify why G2D approximates the SJ3D behavior.
+- If `ReducedSetHindmarshRose` is unavailable in the installed TVB version, use `models.Generic2dOscillator()` as a placeholder but explicitly note this limitation in the notebook and justify why G2D approximates the SJ3D behavior.
 
 ### 3. Parameter Space Exploration (REQUIRED)
 Systematically explore TWO global parameters and identify their optimal values:
@@ -52,7 +52,7 @@ Explicitly discuss: Does the simulated BOLD signal show plausible resting-state 
 - Do NOT skip the parameter space exploration (single simulated point is insufficient).
 - Do NOT use less than 4 minutes of BOLD simulation.
 - Do NOT omit the frequency validation.
-- Do NOT use a model other than SJ3D without justification.
+- Do NOT use a model other than ReducedSetHindmarshRose without justification.
 
 ## Expected Output
 A notebook with: (1) lesion-modified connectivity setup, (2) parameter exploration heatmap, (3) optimal parameter selection, (4) 4-minute BOLD simulation, (5) amplitude/frequency/FC validation plots, (6) discussion of structure-function correlation.
