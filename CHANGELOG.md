@@ -90,3 +90,37 @@ The batch is running; more results will be collected overnight.
 - Let batch complete overnight (~2 hrs remaining with 2 workers).
 - Run `autoresearch.sh` on epilepsy goal (3.50 → target 4.75) to test full autonomous pipeline.
 - Based on batch results, identify which dimensions need skill-level mutations per goal type.
+
+## 2026-04-27 — Trial 4: Autoresearch Loop Test
+
+### What changed
+- `bin/autoresearch.sh` created: trial → evaluate → mutate → apply → validate → keep/revert pipeline
+- `bin/apply_mutation.sh` created: mechanical JSON mutation applier (edit/create/delete/append)
+- `mutate.sh` redesigned to request strict JSON output from mutation agent
+- `run_batch.sh` added for parallel baseline sweeps
+
+### Autoresearch epilepsy results
+| Iter | Pre-Mutation | Post-Mutation | Kept? |
+|---|---|---|---|
+| 1 | 2.75 | 3.25 | ✅ 2.75 → 3.25 |
+| 2 (re-run) | 3.75 | 3.00 | ❌ Reverted |
+| 3 | 3.75 | 3.75 | ❌ No improvement |
+
+**Key insight**: The notebook-format skill + updated driver/navigator prompts (from the JSON mutation plan) brought epilepsy from 3.50 (trial 4) to 3.75 on validation. No further mutations improved it within 2 iterations.
+
+### Blockers discovered
+1. **Batch script died after 4 goals** due to `set -e` + empty `evaluation.json` causing jq to fail.
+2. **Duplicate run_trial.sh processes** — still unexplained; may be harmless but noisy.
+3. **Autoresearch creates untracked files** (`EOF`, `DRIVER_MESSAGE.md`) that interfere with `git checkout`. Fixed with `-f` flag and path guards.
+4. **JSON extraction** needs balanced-brace parsing, not regex.
+
+### What works
+- JSON mutation pipeline: mutator outputs JSON → applier applies 100% correctly
+- Multi-skill mutations: can create new skills (notebook-format added successfully)
+- Goal-agnostic seed: scores ~3.5-4.0 baseline on diverse goals
+- Overnight batch: running with 2 workers, targeting all 20 goals
+
+### Remaining questions for tomorrow
+- Will the 20-goal batch complete overnight with 2 workers (~2-3 hours)?
+- Which goals score below 3.0? Those need targeted mutations.
+- Is the duplicate process issue causing file corruption?
