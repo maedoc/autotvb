@@ -25,6 +25,18 @@ fi
 
 NB_TEXT=$(if [ -f "$NB_SCRIPT" ]; then cat "$NB_SCRIPT"; else echo "NOTEBOOK NOT FOUND"; fi)
 
+EVAL_TIMEOUT=${EVAL_TIMEOUT:-180}
+
+# Truncate overly long notebooks to prevent evaluator context overflow
+NB_LEN=${#NB_TEXT}
+MAX_NB_LEN=15000
+if [ "$NB_LEN" -gt "$MAX_NB_LEN" ]; then
+    TRUNCATED_LEN=12000
+    NB_TEXT=$(printf '%s' "$NB_TEXT" | head -c "$TRUNCATED_LEN")
+    NB_TEXT="${NB_TEXT}"$'\n\n# [... NOTEBOOK TRUNCATED: '"$NB_LEN"' characters total, showing first '"$TRUNCATED_LEN"'. Complete notebook: '"$NB_SCRIPT"' ...]\n'
+    echo "WARNING: Notebook too large ($NB_LEN chars), truncated to $TRUNCATED_LEN for evaluation" >&2
+fi
+
 # Build prompt — use single-quoted heredoc to avoid shell expansion of API examples
 cat > "$TRIAL_DIR/.eval_prompt.txt" <<'PRMPT'
 You are an independent scientific reviewer evaluating Jupyter notebooks for The Virtual Brain (TVB) Python simulator.
@@ -58,7 +70,7 @@ $GOAL_TEXT
 $NB_TEXT
 EOF
 
-RESULT=$(pi \
+RESULT=$(timeout "$EVAL_TIMEOUT" pi \
     --mode text \
     --no-session \
     --tools read,bash \
@@ -86,6 +98,16 @@ if m:
 # If extraction failed, keep raw
 if [ ! -s "$RESULT_FILE" ]; then
     echo '{}' > "$RESULT_FILE"
+fi
+
+# Empty-eval guard: if file is empty, too small, or just {}, write fallback
+EVAL_SIZE=$(wc -c < "$RESULT_FILE" 2>/dev/null || echo 0)
+EVAL_CONTENT=$(cat "$RESULT_FILE" 2>/dev/null || echo '{}')
+if [ "$EVAL_SIZE" -lt 50 ] || [ "$EVAL_CONTENT" = '{}' ] || [ "$EVAL_CONTENT" = '' ]; then
+    cat > "$RESULT_FILE" <<'FALLBACK'
+{"correctness":1,"code_quality":1,"scientific_validity":1,"token_efficiency":5,"scalar_score":1.0,"fallback":true,"justification":"Evaluator context overflow, timeout, or empty response — notebook too large or evaluation failed. Manual review required."}
+FALLBACK
+    echo "WARNING: Empty or trivial evaluation detected ($EVAL_SIZE bytes). Wrote fallback score=1.0" >&2
 fi
 
 echo "Evaluation written to $RESULT_FILE"
