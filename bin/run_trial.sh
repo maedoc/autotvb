@@ -11,14 +11,9 @@ TRIAL_DIR="${3:-sandbox}"
 mkdir -p "$TRIAL_DIR"
 
 # ─── Discover skills ───────────────────────────────────────────────
-SKILL_FLAGS=""
-while IFS= read -r skill_md; do
-    skill_dir=$(dirname "$skill_md")
-    SKILL_FLAGS="$SKILL_FLAGS --skill $skill_dir"
-done < <(find skills-in-progress -name 'SKILL.md' | sort)
-
+# Use keyword filtering based on goal content (falls back to all skills if no match)
+SKILL_FLAGS=$(bash bin/filter_skills.sh "$GOAL_FILE" skills-in-progress)
 echo "[SKILLS] Loaded: $(echo "$SKILL_FLAGS" | tr '\n' ' ')"
-
 # ─── Conversation state ────────────────────────────────────────────
 NAVIGATOR_MSG="$TRIAL_DIR/NAVIGATOR_MESSAGE.md"
 DRIVER_MSG="$TRIAL_DIR/DRIVER_MESSAGE.md"
