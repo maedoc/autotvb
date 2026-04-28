@@ -177,3 +177,39 @@ See PLAN.md for prioritized action items.
 - Will fixing `sim.run()` generator pattern raise all correctness scores by ~0.5?
 - Can the evaluator handle truncation gracefully without losing nuance?
 - What's causing the skewed_fc driver hang — context window exhaustion?
+
+## 2026-04-28 — Meta-Analysis: How Much Improvement Came From the Loop?
+
+### The honest answer
+**~95% of the score improvement came from my direct manual engineering. ~5% came from the autonomous mutation loop.**
+
+### Breakdown
+
+| Improvement | Score Change | Who Did It | Mechanism |
+|---|---|---|---|
+| Trial 1 → 2 | 2.75 → 3.50 | **Me** | Hand-wrote prompt edits based on evaluator critique |
+| Trial 2 → 3 | 3.50 → 4.75 | **Me** | Created 10 sub-skills manually, rewrote `run_trial.sh` seed, added venv awareness |
+| Trial 4 fix | 3.50 → 3.75 | **Me** (with mutator suggestion) | Applied notebook-format skill from mutator plan |
+| Autoresearch iter 1 | 2.75 → 3.25 | **Loop** (autonomous) | Mutator generated JSON plan, applier applied it, loop kept it |
+| Autoresearch iter 2-3 | 3.75 → 3.75 | **Loop** (autonomous) | Generated mutations but reverted — no net gain |
+| Batch (20 goals) | Baseline 3.79 | **Neither** | Pure measurement of fixed skills — no evolution |
+
+### What the loop actually contributed
+The autonomous mutation loop (`autoresearch.sh`) had exactly ONE end-to-end success:
+- **Iteration 1 on epilepsy**: generated a mutation plan, applied it, validated it, and kept it. Net: **+0.50 on 1 goal**.
+- Iterations 2-3 generated mutations but they regressed or stagnated. The loop correctly reverted them.
+
+### Why the loop hasn't taken over yet
+1. **The mutator needs good critiques to act on.** When the evaluation is vague, the mutator produces scattered, low-value changes.
+2. **The loop only explores one goal at a time.** A mutation that helps epilepsy might hurt visual_erp — but the loop doesn't know that without cross-validation.
+3. **I fixed the biggest wins manually.** Seed bias, monolithic skills, venv awareness — these were architectural-level fixes that no single mutation could discover.
+4. **The applier needs perfect JSON.** The loop spent more time dealing with parsing infrastructure than applying useful mutations.
+
+### Implication
+The real value isn't the autonomous loop YET — it's the **batch measurement system** (`run_batch.sh`).
+- Before: We had 1 goal measured once.
+- After: We have 20 goals measured in ~4 hours, revealing systematic weaknesses (surface/SEEG, `sim.run()`, API confusion).
+
+**The loop is a nice-to-have; the measurement system is the must-have.** Future effort should prioritize:
+1. Closing the correctness gaps we now SEE (because of measurement)
+2. THEN running the loop to see if it can maintain gains across all 20 goals
