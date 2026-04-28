@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 ```
 
 ## Building a Simulation
-Every TVB simulation follows this pattern. Fill in the blanks:
+Every TVB simulation follows this pattern:
 ```python
 # 1. Connectivity
 conn = connectivity.Connectivity.from_file()  # or from_file("custom.zip")
@@ -27,10 +27,11 @@ model = models.Generic2dOscillator(a=numpy.array([-0.5]), b=numpy.array([-15.0])
 coup = coupling.Linear(a=numpy.array([0.0154]))
 
 # 4. Integrator
-# (see noise-and-integrator skill for noise/integrator details)
+heunint = integrators.HeunDeterministic(dt=2**-4)
 
 # 5. Monitors
-mon = (monitors.TemporalAverage(period=5.0),)
+mon_raw = monitors.Raw(period=0.5)
+mon_avg = monitors.TemporalAverage(period=5.0)
 
 # 6. Simulator
 sim = simulator.Simulator(
@@ -38,20 +39,17 @@ sim = simulator.Simulator(
     connectivity=conn,
     coupling=coup,
     integrator=heunint,
-    monitors=mon
+    monitors=(mon_raw, mon_avg)
 )
 sim.configure()
 
-# 7. Run — sim() returns a GENERATOR. NEVER try to unpack it directly.
-# Single monitor: iterate the 1-tuple
-for (t, y), in sim(simulation_length=1e3):
-    pass
+# 7. Run
+# Option A: sim.run() returns a LIST of monitor result tuples.
+# Best for: standard post-hoc analysis after the full simulation.
+(t_raw, y_raw), (t_avg, y_avg) = sim.run(simulation_length=1e3)
 
-# Multiple monitors with SAME period
-for (t1, y1), (t2, y2) in sim(simulation_length=1e3):
-    pass
-
-# Multiple monitors with DIFFERENT periods — some yields contain None
+# Option B: sim() is a generator yielding per-step monitor tuples.
+# Best for: custom per-step logic, streaming, or when monitors have different periods.
 raw_data = []
 avg_data = []
 for monitor_tuple in sim(simulation_length=1e3):
@@ -59,26 +57,27 @@ for monitor_tuple in sim(simulation_length=1e3):
         raw_data.append(monitor_tuple[0])
     if monitor_tuple[1] is not None:
         avg_data.append(monitor_tuple[1])
-
-# Convert collected (t, y) tuples back to arrays
-# Each element is (scalar_time, narray_state_vars) — use numpy.array, not concatenate
-t_raw = numpy.array([r[0] for r in raw_data])
-y_raw = numpy.array([r[1] for r in raw_data])
-t_avg = numpy.array([a[0] for a in avg_data])
-y_avg = numpy.array([a[1] for a in avg_data])
+# Convert collected tuples to arrays
+if raw_data:
+    t_raw = numpy.array([r[0] for r in raw_data])
+    y_raw = numpy.array([r[1] for r in raw_data])
+if avg_data:
+    t_avg = numpy.array([a[0] for a in avg_data])
+    y_avg = numpy.array([a[1] for a in avg_data])
 ```
 
 ## Critical Rules
-- **Always `configure()`** connectivity, stimulus, and simulator before running.
+- **Always `configure()`** connectivity before running.
 - **Array wrapping**: Parameters must be numpy arrays, even scalars: `numpy.array([value])`.
 - **Region numbering**: Default connectivity has 76 regions. V1/V2 are usually regions 35, 36.
-- **Prose/code drift**: If markdown says "amp = 1e-3", the code block must literally set `amp` to `1e-3`, not `0.5`.
+- **Prose/code drift**: If markdown says "amp = 1e-3", the code must literally set `amp` to `1e-3`.
+- **Conduction speed** belongs on `Connectivity`, NOT `Simulator()`: `conn.speed = numpy.array([4.0]); conn.configure()`.
+- **simulation_length** belongs on `sim(...)` or `sim.run(...)`, NOT in the `Simulator()` constructor.
 
 ## Common API Mistakes to Avoid
 | Wrong | Why | Right |
 |---|---|---|
-| `(t, y), = sim.run(...)` | `sim.run()` returns a generator, not a tuple | `for (t, y), in sim(...):` |
-| `for (t1, y1), (t2, y2) in sim(...)` when monitors have different periods | One monitor may yield `None`, causing unpack error | Check `is not None` per monitor |
-| `conduction_speed=4.0` passed to `Simulator()` | Must be set on `Connectivity`, not `Simulator` | `conn.speed = numpy.array([4.0]); conn.configure()` |
-| `simulation_length=1e3` passed to `Simulator()` | Must be passed to `sim(...)` call, not constructor | `sim(simulation_length=1e3)` |
-| `numpy.concatenate([a[0] for a in data])` on scalar times | `concatenate` needs arrays, not 0-d scalars | `numpy.array([a[0] for a in data])` |
+| `conduction_speed=4.0` in `Simulator(...)` | Must be set on `Connectivity` | `conn.speed = numpy.array([4.0]); conn.configure()` |
+| `simulation_length=1e3` in `Simulator(...)` | Must be in `sim(...)` or `sim.run(...)` | `sim.run(simulation_length=1e3)` |
+| `numpy.concatenate([a[0] for a in data])` on scalar times | `concatenate` fails for 0-d scalars | `numpy.array([a[0] for a in data])` |
+| `for (t1, y1), (t2, y2) in sim(...)` when periods differ | A monitor may yield `None`, cannot unpack | Use None-safe check per index |
