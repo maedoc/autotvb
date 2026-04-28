@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 # run_batch.sh — Parallel baseline sweep across many goals
+# Note: no set -e — we handle errors manually to avoid killing the batch on minor failures
 # Usage: run_batch.sh [GOAL_DIR] [MAX_JOBS] [MAX_TURNS]
 #   GOAL_DIR: directory containing *.GOAL.md files (default: benchmarks/goals)
 #   MAX_JOBS: parallel workers (default: 4)
@@ -63,7 +64,7 @@ for goal in "${goals[@]}"; do
     goal_name=$(basename "$goal" .GOAL.md)
     trial_dir="$BATCH_DIR/${goal_name}"
     eval_file="$trial_dir/evaluation.json"
-    if [ -f "$eval_file" ]; then
+    if [ -f "$eval_file" ] && [ -s "$eval_file" ]; then
         jq -c --arg goal "$goal_name" --arg dir "$trial_dir" \
             '{goal: $goal, trial_dir: $dir} + .' \
             "$eval_file" >> "$SUMMARY"
