@@ -14,6 +14,14 @@ mkdir -p "$TRIAL_DIR"
 # Use keyword filtering based on goal content (falls back to all skills if no match)
 SKILL_FLAGS=$(bash bin/filter_skills.sh "$GOAL_FILE" skills-in-progress)
 echo "[SKILLS] Loaded: $(echo "$SKILL_FLAGS" | tr '\n' ' ')"
+
+# ─── Model override ────────────────────────────────────────────────
+PI_MODEL="${PI_MODEL:-}"
+MODEL_FLAG=""
+if [ -n "$PI_MODEL" ]; then
+    MODEL_FLAG="--model $PI_MODEL"
+    echo "[MODEL] Using: $PI_MODEL"
+fi
 # ─── Conversation state ────────────────────────────────────────────
 NAVIGATOR_MSG="$TRIAL_DIR/NAVIGATOR_MESSAGE.md"
 DRIVER_MSG="$TRIAL_DIR/DRIVER_MESSAGE.md"
@@ -74,6 +82,7 @@ for turn in $(seq 1 "$MAX_TURNS"); do
     # ─── DRIVER WRITE turn ─────────────────────────────────────────
     echo "[DRIVER] Writing notebook..."
     DRIVER_OUTPUT=$(pi \
+        $MODEL_FLAG \
         --mode text \
         --no-session \
         --tools read,bash,write,edit \
@@ -114,6 +123,7 @@ EOF
     # ─── DRIVER FIX/REPORT turn ──────────────────────────────────
     echo "[DRIVER] Reviewing execution results..."
     DRIVER_OUTPUT=$(pi \
+        $MODEL_FLAG \
         --mode text \
         --no-session \
         --tools read,bash,write,edit \
@@ -126,6 +136,7 @@ EOF
     # ─── NAVIGATOR turn ──────────────────────────────────────────
     echo "[NAVIGATOR] Running..."
     NAVIGATOR_OUTPUT=$(pi \
+        $MODEL_FLAG \
         --mode text \
         --no-session \
         --tools read,bash \

@@ -39,6 +39,11 @@ NAMES=(
 
 # Global timeout: 2 hours per trial (7200 seconds)
 GLOBAL_TIMEOUT=7200
+
+# Default model (override with env var)
+PI_MODEL="${PI_MODEL:-ollama/kimi-k2.6:cloud}"
+export PI_MODEL
+echo "Model: $PI_MODEL"
 MAX_TURNS=5
 
 echo "=== Overnight Batch: Research Goals ==="

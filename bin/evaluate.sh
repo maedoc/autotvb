@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# ─── Model override ────────────────────────────────────────────────
+PI_MODEL="${PI_MODEL:-}"
+MODEL_FLAG=""
+if [ -n "$PI_MODEL" ]; then
+    MODEL_FLAG="--model $PI_MODEL"
+    echo "[MODEL] Using: $PI_MODEL" >&2
+fi
 set -euo pipefail
 
 # evaluate.sh — Independent LLM evaluation of a trial notebook
@@ -71,6 +79,7 @@ $NB_TEXT
 EOF
 
 RESULT=$(timeout "$EVAL_TIMEOUT" pi \
+    $MODEL_FLAG \
     --mode text \
     --no-session \
     --tools read,bash \
