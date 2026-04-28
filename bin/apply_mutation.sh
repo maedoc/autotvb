@@ -34,6 +34,12 @@ for m in mutations:
 
     abs_path = pathlib.Path(path).resolve()
     
+    # Reject obviously invalid paths
+    if path in ('', '.', '..', 'EOF'):
+        print(f"[FAIL] invalid path: {path}")
+        failed += 1
+        continue
+    
     if mtype == "create":
         content = m.get("content", "")
         abs_path.parent.mkdir(parents=True, exist_ok=True)
@@ -89,3 +95,4 @@ print(f"\n=== Applied {applied} mutations, {failed} failed ===")
 PYEOF
 
 echo "Done."
+# No-op — will insert via python instead

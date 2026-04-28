@@ -59,6 +59,12 @@ with open('$SESSION', 'w') as f:
     json.dump(session, f, indent=2)
 "
 
+    # Update best score (even without mutations)
+    if awk "BEGIN {exit !($SCORE > $BEST_SCORE)}"; then
+        BEST_SCORE="$SCORE"
+        BEST_BRANCH="$BRANCH"
+    fi
+
     # ─── Mutate ──────────────────────────────────────────────────
     if awk "BEGIN {exit !($SCORE >= 4.0)}"; then
         echo "[SKIP] Score $SCORE >= 4.0, skipping mutation."
