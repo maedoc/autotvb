@@ -1,0 +1,25 @@
+.git
+.vscode
+.idea
+__pycache__
+*.pyc
+*.pyo
+.DS_Store
+sandbox/
+benchmarks/batch_*
+benchmarks/autoresearch_*.log
+*.log
+.env
+.venv/
+
+# Docker itself
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Large data that shouldn't be in build context
+*.mat
+*.txt.bz2
+*.h5
+*.nii
+*.nii.gz

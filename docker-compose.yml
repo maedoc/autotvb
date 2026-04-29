@@ -1,0 +1,91 @@
+# Autotvb — Docker Compose for skill-creation experiments
+# Usage: docker-compose up -d autotvb
+#        docker-compose exec autotvb bash
+#        PI_MODEL=ollama/kimi-k2.6:cloud bash bin/overnight_batch.sh
+
+version: "3.8"
+
+services:
+  autotvb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: autotvb:latest
+    container_name: autotvb
+    volumes:
+      - .:/app
+      - autotvb-tvb-env:/tmp/tvb_env  # persistent venv
+      - autotvb-sandbox:/app/sandbox    # output dir for notebooks/logs
+      - autotvb-benchmarks:/app/benchmarks/batch_outputs  # batch results
+    environment:
+      # Default model. Override at runtime:
+      # docker-compose exec -e PI_MODEL=ollama/gemma4:e4b autotvb bash
+      - PI_MODEL=${PI_MODEL:-ollama/kimi-k2.6:cloud}
+      - TVB_ENV=/tmp/tvb_env
+      - PYTHONPATH=/app
+      # If using external/cloud provider, uncomment:
+      # - PI_API_KEY=${PI_API_KEY:-}
+    working_dir: /app
+    # Keep container running so we can exec into it for interactive work
+    command: tail -f /dev/null
+    # For CUDA/if you need GPU for ollama locally:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    depends_on:
+      - ollama
+    networks:
+      - autotvb-net
+
+  # Ollama for local model inference
+  # The autotvb container talks to this via http://ollama:11434
+  ollama:
+    image: ollama/ollama:latest
+    container_name: autotvb-ollama
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    # Uncomment for GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    networks:
+      - autotvb-net
+
+  # Optional: Jupyter server for inspecting generated notebooks
+  jupyter:
+    image: autotvb:latest
+    container_name: autotvb-jupyter
+    volumes:
+      - .:/app
+      - autotvb-sandbox:/app/sandbox
+    ports:
+      - "8888:8888"
+    command: >
+      bash -c "
+        source /opt/tvb_env/bin/activate &&
+        jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+      "
+    depends_on:
+      - autotvb
+    networks:
+      - autotvb-net
+
+volumes:
+  autotvb-tvb-env:
+  autotvb-sandbox:
+  autotvb-benchmarks:
+  ollama-data:
+
+networks:
+  autotvb-net:
+    driver: bridge
