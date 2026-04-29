@@ -114,9 +114,9 @@ EVAL_SIZE=$(wc -c < "$RESULT_FILE" 2>/dev/null || echo 0)
 EVAL_CONTENT=$(cat "$RESULT_FILE" 2>/dev/null || echo '{}')
 if [ "$EVAL_SIZE" -lt 50 ] || [ "$EVAL_CONTENT" = '{}' ] || [ "$EVAL_CONTENT" = '' ]; then
     cat > "$RESULT_FILE" <<'FALLBACK'
-{"correctness":1,"code_quality":1,"scientific_validity":1,"token_efficiency":5,"scalar_score":1.0,"fallback":true,"justification":"Evaluator context overflow, timeout, or empty response — notebook too large or evaluation failed. Manual review required."}
+{"correctness":0,"code_quality":0,"scientific_validity":0,"token_efficiency":5,"scalar_score":0.0,"fallback":true,"justification":"Evaluator context overflow, timeout, or empty response — notebook too large or evaluation failed. Manual review required."}
 FALLBACK
-    echo "WARNING: Empty or trivial evaluation detected ($EVAL_SIZE bytes). Wrote fallback score=1.0" >&2
+    echo "WARNING: Empty or trivial evaluation detected ($EVAL_SIZE bytes). Wrote fallback score=0.0" >&2
 fi
 
 echo "Evaluation written to $RESULT_FILE"

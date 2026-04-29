@@ -10,3 +10,5 @@ benchmarks/batch.pid
 bin/sandbox/
 *.ipynb
 DRIVER_MESSAGE.md
+.env
+

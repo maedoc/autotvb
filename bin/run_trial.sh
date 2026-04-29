@@ -32,7 +32,7 @@ EXEC_REPORT="$TRIAL_DIR/EXECUTION_REPORT.md"
 # Seed first navigator message
 cp "$GOAL_FILE" "$TRIAL_DIR/GOAL.md"
 
-cat > "$NAVIGATOR_MSG" << 'NAVINIT'
+cat > "$NAVIGATOR_MSG" << NAVINIT
 ## Status: planning
 
 I have read the goal below. I will now create a step-by-step plan and then instruct the driver to implement it.
@@ -81,7 +81,7 @@ for turn in $(seq 1 "$MAX_TURNS"); do
 
     # ─── DRIVER WRITE turn ─────────────────────────────────────────
     echo "[DRIVER] Writing notebook..."
-    DRIVER_OUTPUT=$(pi \
+    DRIVER_OUTPUT=$(timeout 300 pi \
         $MODEL_FLAG \
         --mode text \
         --no-session \
@@ -122,7 +122,7 @@ EOF
 
     # ─── DRIVER FIX/REPORT turn ──────────────────────────────────
     echo "[DRIVER] Reviewing execution results..."
-    DRIVER_OUTPUT=$(pi \
+    DRIVER_OUTPUT=$(timeout 300 pi \
         $MODEL_FLAG \
         --mode text \
         --no-session \
@@ -135,7 +135,7 @@ EOF
 
     # ─── NAVIGATOR turn ──────────────────────────────────────────
     echo "[NAVIGATOR] Running..."
-    NAVIGATOR_OUTPUT=$(pi \
+    NAVIGATOR_OUTPUT=$(timeout 300 pi \
         $MODEL_FLAG \
         --mode text \
         --no-session \

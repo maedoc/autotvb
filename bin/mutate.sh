@@ -85,8 +85,8 @@ echo "Calling mutation agent..."
 # Run mutation agent
 pi --mode text --no-session --tools read,bash -p "$MUTATE_PROMPT" > "$LOG_DIR/mutation_raw.txt" 2>&1 || true
 
-# Extract JSON from raw output using external script
-python3 /tmp/extract_mutation.py "$LOG_DIR"
+# Extract JSON from raw output using project script
+python3 "$REPO_DIR/bin/extract_mutation.py" "$LOG_DIR"
 exit_code=$?
 
 # Report

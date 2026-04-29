@@ -65,8 +65,7 @@ for i in "${!GOALS[@]}"; do
     
     session="batch_research_${name}"
     tmux new-session -d -s "$session" \
-        "timeout ${GLOBAL_TIMEOUT} bash bin/run_trial.sh \"$goal\" ${MAX_TURNS} \"$dir\" > \"$dir/trial.log\" 2>&1; echo '=== BATCH_TRIAL_DONE status=$? ===' >> \"$dir/trial.log\""
-    
+        "cd '${REPO_DIR}' && timeout ${GLOBAL_TIMEOUT} bash bin/run_trial.sh \"$goal\" ${MAX_TURNS} \"\$dir\" > \"\$dir/trial.log\" 2>&1; echo '=== BATCH_TRIAL_DONE status=$? ===' >> \"\$dir/trial.log\""    
     echo "Launched $name (tmux: $session)"
 done
 
