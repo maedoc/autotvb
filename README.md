@@ -1,123 +1,156 @@
-# Autotvb — Autobuilding Domain-Specific Skills for Scientific Notebook Generation
+# Autotvb — Experimental Architecture for Autobuilding Domain Skills
 
-## What This Project Is
+## The Core Thesis
 
-Autotvb is a self-improving system that generates scientifically-valid computational neuroscience notebooks for [The Virtual Brain (TVB)](https://www.thevirtualbrain.org/) using AI agents. It combines a **navigator/driver agent pair** with a **structured skill library** that is iteratively refined through benchmarking, evaluation, and targeted mutation.
+**Use large models and goals derived from scientific literature to build composable agent skills, then validate that those skills enable smaller models to perform as domain experts.**
 
-The core idea: **if you can encode domain expertise into composable agent skills, you can automate the generation of research-grade scientific code** — and you can measure whether it works.
+Autotvb is not a TVB notebook generator. It is an experimental architecture for testing whether the skill-creation process works at all. TVB (The Virtual Brain) is the validation domain — a computational neuroscience framework with a large, error-prone API surface, published benchmarks, and objectively scorable outputs. If the architecture produces skills that guide a 4B-parameter model to write valid TVB simulations, the approach is validated.
 
-## The Problem
+## The Problem This Solves
 
-Large language models can write TVB simulation code, but they make domain-specific mistakes:
+Frontier LLMs can write domain-specific code, but they are expensive, slow, and locked behind API gates. A 4B model running locally on a laptop cannot. The gap between "frontier model with deep domain knowledge" and "small model with no domain knowledge" is where skills live.
 
-- Using `sim.run()` as if it returns a generator (it returns a list of monitor tuples)
-- Passing paper parameter names directly to TVB constructors (`tau0` instead of `tau`, `C1` instead of `a_1`)
-- Confusing `monitors.SEEG` with `monitors.iEEG`
-- Forgetting to activate the TVB Python venv before imports
-- Writing analysis code that doesn't match the scientific regime (e.g., PSD on seizure data without burn-in removal)
+Skills are not prompts. They are compressed, composable, validated domain expertise — the distillation of what the large model learned through trial, error, and evaluation into reusable artifacts that any model can load. Think of them as **the output of an automated curriculum design process**.
 
-Each mistake is individually small, but together they produce notebooks that compile but produce meaningless results. In computational neuroscience, **correct code that answers the wrong scientific question is worse than broken code** — because it's harder to detect.
+The key claim: **if skills are well-built, a small model with skills outperforms a large model without them** on domain-specific tasks. Autotvb exists to test this claim.
 
-## The Approach: Skill-Driven Agent Pairs
+## How It Works
 
-### Agent Architecture
+### The Skill-Creation Loop
 
 ```
-┌─────────────┐     message     ┌─────────────┐
-│  Navigator   │ ──────────────> │   Driver     │
-│  (planner)   │ <────────────── │  (coder)     │
-│              │   notebook+log  │              │
-└─────────────┘                  └──────┬───────┘
-      │                                 │
-      │                            ┌────▼─────┐
-      │                            │  Execute  │
-      │                            │  (TVB     │
-      │                            │   venv)   │
-      │                            └───────────┘
-      │                                 │
-      ▼                                 ▼
- ┌─────────┐                    ┌──────────┐
- │ Evaluate │                    │ notebook │
- │ (judge)  │                    │  + log   │
- └─────────┘                    └──────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    Skill Creation Phase                       │
+│                                                              │
+│  Literature ──► Goals ──► Large Model ──► Notebook ──► Score │
+│                  │            │                              │
+│                  │            ▼                              │
+│                  │       Failure Analysis                    │
+│                  │            │                              │
+│                  │            ▼                              │
+│                  └──── Skills ("best so far") ◄── Mutation   │
+│                                                              │
+│  Model: frontier (kimi-k2, deepseek-v4, etc.)               │
+│  Goals: derived from published papers                        │
+│  Skills: never "done" — always "best version we've measured" │
+└──────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    Skill Validation Phase                     │
+│                                                              │
+│  Small Model + Skills ──► Notebook ──► Score                 │
+│                                                              │
+│  Question: does a 4B/9B model with skills match or beat      │
+│  a frontier model WITHOUT skills on the same goals?          │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-- **Navigator**: Plans the approach, reviews driver output, decides when to terminate
-- **Driver**: Writes the notebook using skills, reviews execution errors, fixes bugs
-- **Evaluator**: Scores the final notebook on 4 dimensions (1–5 scale)
+The architecture has two distinct phases:
 
-Each agent loads only the **skills relevant to the current goal**, keeping prompt payload under 25KB.
+1. **Skill creation**: A frontier model attempts domain tasks, gets scored, and the failure patterns are compressed into skills. This is expensive and iterative. The output is a skill library — never final, always "best so far."
 
-### Skill Library
+2. **Skill validation**: A small model loads the skills and attempts the same tasks. If scores are comparable to the frontier model's baseline, the skills are working. If not, the skills need more work.
 
-Skills are small (1–3KB) Markdown files that encode executable domain knowledge:
+### What Skills Actually Are
 
-| Skill | Purpose |
+Skills are small (1–3KB) Markdown files encoding executable domain knowledge. Examples from the TVB domain:
+
+| Skill | What It Captures |
 |---|---|
-| `boilerplate` | TVB imports, Simulator assembly, `sim.run()` vs `sim()` patterns |
-| `tvb-api-mappings` | Paper→TVB parameter name translation table |
-| `parameter-sweep` | Grid search with per-config Simulator rebuild |
-| `heterogeneous-params` | Region-specific parameter arrays |
-| `graph-metrics` | Kuramoto order, coherence, global efficiency, SC-FC correlation |
-| `connectome-surgery` | Zeroing connectivity rows/columns (tumor, stroke) |
-| `seizure-detection` | LFP thresholding, event detection, recruitment latency |
-| `analysis` | FC, PSD, time-series plots, burn-in removal |
-| `surface-forward` | Cortex, RegionMapping, forward solution setup |
-| `notebook-format` | Jupyter cell structure, `\n` literal bug avoidance |
+| `boilerplate` | TVB Simulator assembly pattern — `sim.run()` returns a list, not a generator; configure before run |
+| `tvb-api-mappings` | Paper parameter names → TVB trait names: `tau0` → `tau`, `C1` → `a_1`, `gamma` → `bb` |
+| `connectome-surgery` | How to zero connectivity matrix rows/columns for virtual lesion simulations |
+| `seizure-detection` | LFP computation, amplitude thresholding, recruitment latency from TVB source dynamics |
 
-Skills are **keyword-filtered per goal** — an Alzheimer's simulation loads `parameter-sweep` + `heterogeneous-params` but not `stimulus` or `surface-forward`. This reduces prompt payload from ~38KB (all skills) to ~22KB (relevant skills), cutting per-turn latency from 15+ minutes to 5–8 minutes.
+Each skill is the product of repeated failure. The `boilerplate` skill exists because frontier models consistently made the same `sim.run()` mistake. The `tvb-api-mappings` skill exists because published papers use different names than the TVB API. Skills are **scar tissue from measured failures**.
 
-### Benchmark Goals
+### Why Skills Must Be "Best So Far"
 
-The system is evaluated against **30 benchmark goals** across two tiers:
+No skill is ever declared correct or complete. The domain evolves (new TVB versions, new APIs), the goals evolve (new papers, new clinical targets), and the models evolve (new capabilities, new failure modes). A skill that produces correct code today may break tomorrow when TVB renames a parameter or adds a required argument.
 
-**Tutorial goals** (20): Basic TVB operations — region simulation, surface simulation, stochastic integration, BOLD monitoring, epilepsy modeling. Average score: **3.79/5.0** (baseline), rising to **4.2+** after skill engineering.
+The architecture treats skills as a **versioned, measured, continuously-improving artifact** — like a test suite that grows coverage over time. The benchmark scores are the CI system.
 
-**Paper-grounded research goals** (10): Reproductions of published TVB studies:
-- Epilepsy: VEP Epileptor with permittivity coupling (Jirsa 2017)
-- Stroke: SJ3D + BOLD prediction (Falcon 2016)
-- Alzheimer's: Aβ effect on EEG slowing (Stefanovski 2019)
-- Depression: GABA TEP with JansenRit (Hofsähs 2026)
-- Depression: rTMS with Wilson-Cowan (Iliaens 2021)
-- Schizophrenia: NRG1 knockout with Epileptor (Costa-Klein 2020)
-- Tumor: Virtual resection (Aerts 2020)
-- tDCS: FC modulation (Kunze 2016)
-- Epilepsy: Bayesian fitting (Jirsa 2017 Methods)
-- Parameter space exploration (Falcon/Deco methodology)
+## Validation Domain: The Virtual Brain (TVB)
 
-## What We Learned
+TVB was chosen as the validation domain for specific reasons:
 
-### The measurement system is the real product
+1. **Large, error-prone API surface** — Hundreds of classes with non-obvious constructor signatures, trait-based parameter systems, and version-specific naming changes. LLMs get the details wrong in reproducible ways.
 
-The autonomous mutation loop contributed ~5% of score improvement. Manual skill engineering contributed ~95%. But the **batch benchmarking pipeline** — run 20 goals in parallel, score each, aggregate patterns — was the single highest-leverage investment. It turned "I think this skill helps" into "this skill raised correctness by 0.8 points across 12 goals."
+2. **Published ground truth** — Decades of computational neuroscience papers describe exactly what simulations should produce (seizure propagation patterns, BOLD signal characteristics, EEG frequency shifts). These become objective benchmarks.
 
-### Evaluator hallucinations are a real danger
+3. **Automatable scoring** — Notebooks either execute correctly or they don't. Analysis outputs (PSD peaks, correlation coefficients, seizure counts) can be checked against expected ranges. No human judgment required for basic scoring.
 
-Our evaluator was downvoting correct code because it believed `sim.run()` returns a generator. In reality, it returns a list. Correcting this single misconception raised 3 goals by 0.25–2.0 points. **The evaluator must encode domain-specific API facts**, not just general code review criteria.
+4. **Multiple difficulty tiers** — From "simulate a region" (easy) to "fit epilepsy parameters via Bayesian search" (hard). This lets us measure skill quality across a range of complexity.
 
-### Paper parameter names ≠ TVB parameter names
+### Current TVB Benchmarks
 
-Published papers use names like `tau0`, `C1`, `gamma` that map to TVB traits `tau`, `a_1`, `bb`. Without an explicit mapping table loaded early in the prompt, agents use paper names directly and produce TraitTypeErrors. A 1.5KB `tvb-api-mappings` skill solved this.
+| Tier | Count | Source | Status |
+|---|---|---|---|
+| Tutorial goals | 20 | TVB documentation examples | Baselined: avg ~3.8/5.0 |
+| Paper-grounded goals | 10 | Published TVB studies (Jirsa, Falcon, Stefanovski, etc.) | Unvalidated (infrastructure bugs) |
+| Clinical validation | future | Patient-specific TVB outputs | Not started |
 
-### Skills must be small and composable
+The 10 paper-grounded goals span epilepsy, stroke, Alzheimer's, depression, schizophrenia, tumor resection, tDCS, and parameter space exploration — a broad test of whether skills transfer across clinical applications within the same domain.
 
-Early monolithic skills (15KB+) caused 15+ minute LLM turns and low signal-to-noise. The current 1–3KB per-skill approach with keyword filtering keeps latency manageable and makes mutations precise — a change to `boilerplate` doesn't affect `analysis`.
+## What We've Learned So Far
 
-### The autonomous loop is premature
+### The measurement system IS the architecture
 
-Until skills cover the domain thoroughly and baseline scores stabilize, the mutation-selection loop adds noise. It becomes valuable for fine-tuning (e.g., "optimize token efficiency without losing correctness"), but not for capability building.
+The batch evaluation pipeline — run N goals in parallel, score each on 4 dimensions, aggregate patterns — is the most valuable component. It turned qualitative "I think this helps" into quantitative "this raised correctness by 0.8 points across 12 goals." Without measurement, skill creation is just prompt engineering with extra steps.
+
+### Skills must be discovered, not designed
+
+Every skill in the library was created in response to a measured failure pattern, not from upfront design. The `tvb-api-mappings` skill exists because notebooks consistently used `tau0` instead of `tau`. The `notebook-format` skill exists because Jupyter cell serialization produced `\n` literals inside JSON strings. Design-first skills would have missed these entirely.
+
+### The evaluator can hallucinate too
+
+Our evaluator was downvoting correct code because it believed `sim.run()` returns a generator (it returns a list). Fixing this single evaluator misconception raised 3 goals by 0.25–2.0 points. **Evaluation quality caps skill quality** — if the evaluator is wrong, the skills converge toward the wrong target.
+
+### Frontier models don't need skills as much
+
+On well-documented tasks (tutorial goals), frontier models score 4.5–5.0 without skills. Skills help most on edge cases and unfamiliar APIs. This is expected — the real test is whether skills close the gap for small models.
+
+### The autonomous mutation loop is premature
+
+~95% of measured improvement came from manual skill engineering (identifying failure patterns, writing targeted skills). The mutation-selection loop contributed ~5%. The loop may become valuable for fine-tuning skills once baseline coverage is sufficient, but capability-building still requires human pattern recognition.
 
 ## Key Metrics
 
 | Metric | Value |
 |---|---|
-| Tutorial goal average | ~3.79 → ~4.2+ (with fixed evaluator) |
-| Best single goal | 5.00/5.00 (region simulation, surface+SEEG) |
-| Skills | 14 active (driver: 10, navigator: 4) |
+| Active skills | 14 (driver: 10, navigator: 4) |
+| Benchmark goals | 30 (20 tutorial + 10 paper-grounded) |
+| Tutorial baseline | ~3.8/5.0 (best: 5.0) |
+| Paper-goal baseline | Not yet measured |
 | Skill payload per goal | ~22KB (filtered from 38KB total) |
-| Per-turn latency | 5–8 min (with filtering) |
-| Paper-grounded goals | 10 (unvalidated — blocked by infrastructure bugs) |
-| Total git commits | ~30 |
+| Small-model scores | Not yet measured |
+
+## The Multi-Model Benchmark (Next Step)
+
+The critical experiment: **run the same benchmark goals across a range of model sizes, with and without skills, and measure the score delta.**
+
+| Model | Size | With Skills | Without Skills | Delta |
+|---|---|---|---|---|
+| kimi-k2.6 (cloud) | — | ? | ? | ? |
+| deepseek-v4-flash (cloud) | — | ? | ? | ? |
+| qwen3.6 | 23B | ? | ? | ? |
+| gemma4 | 26B | ? | ? | ? |
+| gemma4:e4b | 4B | ? | ? | ? |
+| qwen3.5:9b | 9B | ? | ? | ? |
+
+If the delta (with skills − without skills) is large for small models and small for large models, the thesis is validated: skills are the mechanism for transferring frontier-model domain expertise to local models.
+
+## Broader Applicability
+
+If the approach works on TVB, it should transfer to any domain where:
+
+1. **The API surface is large enough** that LLMs make systematic, reproducible errors
+2. **Ground truth exists** in the form of published results, test suites, or objective evaluation criteria
+3. **Tasks decompose** into composable sub-problems (imports, parameters, execution, analysis)
+4. **Scoring can be automated** — no human-in-the-loop required for the evaluation loop
+
+Candidate domains: quantum computing (Qiskit/Cirq), finite element analysis (FEniCS/COMSOL), bioinformatics (Scanpy/DESeq2), robotics (ROS2), chip design (OpenROAD).
 
 ## Repository Structure
 
@@ -126,32 +159,33 @@ autotvb/
 ├── bin/                          # Pipeline scripts
 │   ├── run_trial.sh              # Single navigator/driver trial
 │   ├── evaluate.sh               # Structured notebook evaluation
-│   ├── overnight_batch.sh        # Parallel 10-goal batch runner
-│   ├── filter_skills.sh          # Keyword-based skill selection
-│   ├── autoresearch.sh           # Mutation-selection loop
-│   └── mutate.sh                 # JSON mutation planner
+│   ├── overnight_batch.sh        # Parallel batch runner
+│   ├── filter_skills.sh          # Per-goal skill selection
+│   └── autoresearch.sh           # Mutation-selection loop
 ├── prompts/
 │   ├── driver/role.md            # Driver system prompt
 │   └── navigator/role.md         # Navigator system prompt
-├── skills-in-progress/
-│   ├── driver/                   # Code generation skills (10)
-│   └── navigator/                # Planning/review skills (4)
+├── skills-in-progress/           # "Best so far" — never final
+│   ├── driver/                   # Code generation skills
+│   └── navigator/                # Planning/review skills
 ├── benchmarks/
-│   ├── goals/                    # 20 tutorial benchmark goals
-│   └── goals_research/           # 10 paper-grounded research goals
+│   ├── goals/                    # Tutorial benchmark goals
+│   └── goals_research/           # Paper-grounded goals
+├── PLAN.md                       # Phased roadmap
 ├── CHANGELOG.md                  # Detailed progress log
-├── PLAN.md                       # Prioritized roadmap
 └── ARCHITECTURE.md               # System design document
 ```
 
-## Getting Started
+## Quick Start
 
 ```bash
-# Prerequisites: TVB installed in /tmp/tvb_env, pi CLI available
-
-# Run a single trial
+# Run a single trial (skill creation phase — frontier model)
 PI_MODEL=ollama/kimi-k2.6:cloud bash bin/run_trial.sh \
     benchmarks/goals_research/alzheimers_abeta_ei.GOAL.md 5 sandbox/trial_alzheimers
+
+# Validate skills with a small model
+PI_MODEL=ollama/gemma4:e4b bash bin/run_trial.sh \
+    benchmarks/goals_research/alzheimers_abeta_ei.GOAL.md 5 sandbox/validate_4b
 
 # Run all 10 research goals overnight
 PI_MODEL=ollama/kimi-k2.6:cloud bash bin/overnight_batch.sh
@@ -161,18 +195,4 @@ PI_MODEL=ollama/kimi-k2.6:cloud bash bin/evaluate.sh \
     sandbox/trial_alzheimers/workflow.ipynb \
     benchmarks/goals_research/alzheimers_abeta_ei.GOAL.md \
     sandbox/trial_alzheimers/evaluation.json
-
-# Poll batch progress
-bash bin/poll_batch.sh sandbox/batch_research_*/
 ```
-
-## Broader Applicability
-
-The pattern — composable domain skills + agent pairs + structured evaluation + iterative benchmarking — is not TVB-specific. It should work for any domain where:
-
-1. **API surface is large and error-prone** — LLMs need explicit guard rails
-2. **Correctness requires domain-specific validation** — generic code review isn't enough
-3. **Benchmarks can be automated** — you can score outputs without human judgment
-4. **Skills compose** — the domain decomposes into independent concerns (imports, parameters, analysis, visualization)
-
-Candidates: quantum computing frameworks, finite element analysis pipelines, bioinformatics workflows, multi-physics simulators.
