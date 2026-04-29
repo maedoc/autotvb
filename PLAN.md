@@ -1,129 +1,163 @@
-# Autoresearch Next Steps Plan
+# Autotvb — Roadmap & Next Steps
 
-Generated after 20-goal baseline sweep (avg 3.78/5.00, 17/20 evaluated).
+Last updated: 2026-04-29, after DeepSeek v4 review.
 
----
+## Current State
 
-## P0 — Fix Critical Infrastructure
+- 14 skills, 30 benchmark goals (20 tutorial + 10 paper-grounded)
+- Tutorial baseline: ~3.79/5.0 (avg), best single: 5.0/5.0
+- Paper-grounded goals: **unvalidated** — blocked by 2 critical infrastructure bugs (now identified)
+- Per-turn latency: 5–8 min with filtered skills (~22KB payload)
+- DeepSeek review found 2 critical bugs, 3 missing skill families, 1 API conflict
 
-### 1. Fix `evaluate.sh` for large notebooks
-**Problem:** Large notebooks with plots exceed evaluator context window → empty `evaluation.json` (1 byte).
-**Seen on:** `tutorial_s4_evokedresponsesinthevisualcortex`.
-**Fix:** Truncate nbconvert output to first ~300 lines + last 50 lines, or summarize with `wc -l`, number of cells, and key code patterns rather than full script.
-**Expected impact:** Re-enable evaluation for large-plot goals (tutorial_s4, surface simulations).
-**Effort:** 15 min.
+## Phase 1: Fix Critical Bugs (30 min)
 
-### 2. Fix `skewed_fc` driver hang
-**Problem:** Driver never wrote `workflow.ipynb` — hung after turn 1, 6 log lines.
-**Hypothesis:** Driver got stuck proposing plans without writing files, or context window exhausted.
-**Fix:** Add explicit "YOU MUST write the notebook file" guard to driver prompt. Or reduce seed message verbosity.
-**Expected impact:** Completes another goal baseline.
-**Effort:** 10 min.
+Identified by DeepSeek v4 review. These block all unattended runs.
 
----
+### P1-1: Fix heredoc literal in `run_trial.sh` (CRITICAL)
+- **Bug**: `cat > "$NAVIGATOR_MSG" << 'NAVINIT'` — single quotes prevent `$(cat "$GOAL_FILE")` from expanding
+- **Impact**: Navigator sees literal `$(cat "$GOAL_FILE")` instead of goal text on turn 1
+- **Fix**: Change `<< 'NAVINIT'` to `<< NAVINIT`, escape any `$` that should remain literal
 
-## P1 — Highest-Impact Skill Mutations
+### P1-2: Fix tmux cwd in `overnight_batch.sh` (CRITICAL)
+- **Bug**: `tmux new-session -d -s "$session" "timeout ... bash bin/run_trial.sh ..."` — tmux spawns in `$HOME`, not `$REPO_DIR`
+- **Impact**: All batch runs fail with `No such file or directory`
+- **Fix**: Add `cd '$REPO_DIR' &&` inside the tmux command string
 
-### 3. Add `sim.run()` generator pattern to driver skills
-**Problem:** Correctness killer — #1 weak dimension (10/17 goals). Notebooks unpack `sim.run()` as `(t, y)` tuples; it returns a generator.
-**Affected goals:** tutorial_s1, stochastic_simulation, simulate_surface_seeg_eeg_meg.
-**Fix:** Add explicit pattern to `skills-in-progress/driver/boilerplate/SKILL.md`:
-```python
-# CORRECT: sim.run() returns a generator
-for (t, raw), in sim(simulation_length=1000):
-    pass
-# OR: use monitor for output
-(t, raw), = next(sim(simulation_length=1000))
-```
-**Expected impact:** Correctness +0.5 on affected goals, raising avg to ~4.0.
-**Effort:** Run mutator on a low-correctness result, or manually add pattern.
+### P1-3: Add `timeout 300` to all `pi` invocations in `run_trial.sh`
+- **Bug**: Individual pi calls have no timeout — if one hangs, entire trial blocks
+- **Fix**: Wrap each `pi` call with `timeout 300` (5 min per turn max)
 
-### 4. Add surface/SEEG-specific API skills
-**Problem:** Surface/SEEG goals score 2.50-3.00 — worst category.
-**Seen errors:** `Cortex.from_file()` with wrong args, shape-indexing bug in EEG post-processing, `SpatialAverage` vs global average confusion.
-**Fix:** Create `skills-in-progress/driver/surface-mesh/SKILL.md` with:
-- `Cortex.from_file()` usage patterns
-- `monitors.EEG` / `monitors.iEEG` / `monitors.SEEG` distinctions
-- `SpatialAverage` shape expectations
-- eeg cap file paths (`eeg_65.txt`)
+### P1-4: Fix fallback score in `evaluate.sh`
+- **Bug**: Fallback score=1.0 masks evaluation failures as "low quality but present"
+- **Fix**: Change to `scalar_score: 0.0` so failures are distinguishable from genuine 1.0 scores
 
-Also create `skills-in-progress/navigator/surface-review/SKILL.md` with surface-specific checklist.
-**Expected impact:** surface_stochastic 2.50 → 3.50, simulate_surface_seeg_eeg_meg 3.00 → 3.75.
-**Effort:** 30 min manual + mutation on surface results.
+### P1-5: Fix `mutate.sh` missing script reference
+- **Bug**: `python3 /tmp/extract_mutation.py` — file doesn't exist in repo
+- **Fix**: Embed extraction logic inline or commit the script to `bin/`
 
-### 5. Add "Common TVB API Mistakes" skill
-**Problem:** Recurring constructor arg errors.
-**Seen errors:**
-- `conduction_speed` passed to `Simulator()` instead of `Connectivity()`
-- `simulation_length` passed to `Simulator()` instead of `sim(simulation_length=...)`
-- `monitors.iEEG` instead of `monitors.SEEG`
-**Fix:** Create `skills-in-progress/driver/api-patterns/SKILL.md` with "anti-patterns" section.
-**Expected impact:** Correctness +0.25 on 5+ goals.
-**Effort:** 15 min.
+### P1-6: Fix iEEG/SEEG conflict across 3 skills
+- **Bug**: `tvb-api-mappings` says `iEEG`, `surface-forward` says `SEEG`, `common-models` says `iEEG`
+- **Fix**: Verify against installed TVB version, unify all 3 skills
 
----
+## Phase 2: First Paper-Goal Baseline (overnight)
 
-## P2 — Targeted Autoresearch
+After P1 fixes, run all 10 paper-grounded goals with a strong cloud model.
 
-### 6. Run autoresearch on worst-performing goal
-**Target:** `surface_stochastic` (score 2.50) or `exploring_the_bold_monitor` (3.25).
-**Approach:**
-1. Create branch, run trial
-2. Run mutator with batch history + low score as critique
-3. Apply mutations
-4. Validate
-5. Keep if score > 2.50
+### P2-1: Run 10-goal overnight batch
+- Model: `ollama/kimi-k2.6:cloud`
+- Max turns: 5, timeout: 2h per trial
+- Expected duration: 2–5 hours
+- Output: `sandbox/batch_research_*/evaluation.json` per goal
 
-**Expected impact:** Learn whether mutations can close the surface gap.
-**Effort:** 2-3 iterations (~45 min each).
+### P2-2: Analyze baseline scores
+- Which goals score ≥4.0? (indicates skills already sufficient)
+- Which goals score <3.0? (indicates missing skills or API gaps)
+- Which goals fail entirely? (indicates infrastructure issues)
+- Target: identify the 3 weakest goals for targeted skill work
 
-### 7. Re-test `visual_erp` with new skills
-**Status:** In progress in batch (has workflow.ipynb, awaiting eval).
-**Expected:** Should score ≥ 4.00 with current skills (was 4.75 in trial 3).
-If it scores lower, investigate what degraded.
+## Phase 3: Multi-Model Benchmarking
 
----
+**Core thesis**: Skills that guide a small local model to produce valid TVB code are better skills than those that only work with frontier models. This is the real test of skill quality.
 
-## P3 — System Robustness
+### Available model tiers
 
-### 8. Fix duplicate `run_trial` process issue
-**Problem:** The parent `run_trial.sh` spawns a child that also runs `run_trial.sh` with identical args.
-**Hypothesis:** A `pi` agent running inside the trial executes a bash command that sources `run_trial.sh`, or a signal handler forks.
-**Fix:** Add `PI_AGENT_CONTEXT=1` environment variable to prevent nested execution. Or check `$$` pid against parent.
-**Expected impact:** Cleaner process trees, less confusion.
-**Effort:** 10 min.
+| Tier | Model | Size | Context | Speed | Notes |
+|---|---|---|---|---|---|
+| **Cloud strong** | `kimi-k2.6:cloud` | — | 128K | 5-8 min/turn | Current baseline |
+| **Cloud budget** | `deepseek-v4-flash:cloud` | — | 128K | 3-5 min/turn | Faster, weaker reasoning |
+| **Local large** | `qwen3.6:128k` | 23GB | 128K | ? | Largest local model |
+| **Local mid** | `gemma4:26b` | 17GB | — | ? | Good general model |
+| **Local small** | `gemma4:e4b` | 9.6GB | — | ? | **Key test**: can skills compensate? |
+| **Local tiny** | `qwen3.5:9b` | 6.6GB | 128K | ? | Extreme skill quality test |
 
-### 9. Add notebook-size guard to `evaluate.sh`
-**Problem:** Context limits silently cause empty evaluations.
-**Fix:** Before calling `pi`, check `wc -c` of nbconvert output. If > 8KB, truncate or replace with structural summary ("N cells, M lines, includes plots").
-**Expected impact:** No more empty evals.
-**Effort:** 15 min.
+### P3-1: Cross-model single-goal benchmark
+- Pick the easiest paper goal (likely `depression_gaba_tep` or `alzheimers_abeta_ei`)
+- Run it with all 6 models above
+- Same skills, same prompt, same evaluator
+- Compare: correctness, scientific_validity, and whether notebook even executes
+- **Question**: How much does model size matter vs skill quality?
 
----
+### P3-2: Skill optimization for small models
+- If a 4B model scores <2.0, analyze failure patterns
+- Are skills too abstract? Need more concrete code templates?
+- Do small models get lost in 22KB of skills? Test with even more aggressive filtering (10KB? 5KB?)
+- Iterate: modify skills → re-benchmark with small model → measure delta
 
-## P4 — Documentation
+### P3-3: Skill-transferability matrix
+- Build a matrix: model × goal × score
+- Identify which skills transfer across model sizes and which don't
+- Hypothesis: `boilerplate` (concrete code patterns) transfers well; `scientific-validity` (abstract reasoning) does not
 
-### 10. Update `ARCHITECTURE.md`
-**Current:** Out of date — describes 2 monolithic skills, no mutation pipeline, no batch system.
-**Fix:** Document the 10 sub-skills, JSON mutation pipeline, batch runner, autoresearch loop.
-**Expected impact:** Onboarding clarity.
-**Effort:** 20 min.
+### P3-4: Budget model batch
+- Run full 10-goal batch with `deepseek-v4-flash:cloud` (cheapest cloud option)
+- Compare scores against `kimi-k2.6:cloud` baseline
+- If scores are within 0.5 points, use budget model for iteration and reserve strong model for final validation
 
----
+## Phase 4: Fill Skill Gaps (targeted)
 
-## Summary: Recommended Order
+Based on Phase 2 baseline + Phase 3 model analysis, build missing skills.
 
-| Step | Action | Effort | Impact |
-|---|---|---|---|
-| 1 | Fix `evaluate.sh` truncation | 15 min | Enable 3 more goals |
-| 2 | Fix skewed_fc hang | 10 min | +1 goal baseline |
-| 3 | Add `sim.run()` pattern | 15 min | Correctness +0.5 avg |
-| 4 | Add surface/SEEG skills | 30 min | Surface +1.0 avg |
-| 5 | Add API anti-patterns skill | 15 min | Correctness +0.25 avg |
-| 6 | Run autoresearch on surface | 90 min | Close worst gap |
-| 7 | Fix duplicate processes | 10 min | Cleaner infra |
-| 8 | Re-test visual_erp | ongoing | Validate skills transfer |
-| 9 | Update ARCHITECTURE.md | 20 min | Docs |
+### P4-1: `connectome-surgery` skill (~1KB)
+- Zeroing connectivity rows/columns
+- SC re-normalization after modification
+- Verification of modified connectivity
+- **Unblocks**: tumor_virtual_resection, stroke_sj3d_bold
 
-**Total estimated time: ~3.5 hours focused work.**
-Expected outcome: Average baseline score rises from **3.78 → 4.20+**.
+### P4-2: `seizure-detection` skill (~1.5KB)
+- LFP computation from source dynamics
+- Amplitude thresholding for seizure onset
+- Recruitment latency measurement
+- **Unblocks**: vep_epileptor_permittivity, epilepsy_bayesian_fitting
+
+### P4-3: `bold-validation` skill (~1KB)
+- BOLD amplitude range check ([0.17, 87])
+- Peak frequency verification (~0.05 Hz)
+- Structure-function correlation
+- **Unblocks**: stroke_sj3d_bold
+
+### P4-4: Thicken `surface-forward`
+- Add default surface data file paths
+- Explain `Simulator(connectivity=conn)` vs `Simulator(surface=cortex)`
+- Add shape-mismatch verification
+- **Unblocks**: simulate_surface_seeg_eeg_meg, surface_stochastic
+
+### P4-5: Fix skill conflicts
+- Unify iEEG/SEEG across all 3 skills
+- Verify parameter mappings against installed TVB version
+- Add API existence checks where uncertain
+
+## Phase 5: Autonomous Loop (when ready)
+
+Not a priority until Phase 4 completes and baselines stabilize.
+
+### P5-1: Re-enable autoresearch on weakest goal
+- Pick the goal with lowest baseline after P4
+- Run 10 iterations of mutate → evaluate → keep/revert
+- Measure: does the loop improve scores beyond manual engineering?
+
+### P5-2: Cross-model autoresearch
+- Run autoresearch with a small local model
+- Question: can the loop discover skill improvements that transfer to stronger models?
+
+### P5-3: Skill distillation
+- After P5-1/P5-2, distill learned patterns into permanent skill updates
+- Remove noise, keep validated improvements
+- Re-benchmark to confirm no regression
+
+## Timeline Estimate
+
+| Phase | Duration | Depends On |
+|---|---|---|
+| P1: Fix bugs | 30 min | Nothing |
+| P2: First baseline | 2–5 hours (overnight) | P1 |
+| P3: Multi-model benchmark | 1 day | P2 results |
+| P4: Fill skill gaps | 2–3 days | P2 + P3 analysis |
+| P5: Autonomous loop | 1–2 days | P4 stable baseline |
+
+## Decision Points
+
+- **After P2**: If all 10 goals score ≥3.5, skip P4 and go to P3 (model benchmarking is more interesting)
+- **After P3**: If small models (<10B) can't score >2.0, investigate prompt compression (reduce skill payload to <10KB)
+- **After P4**: If skill gap-filling doesn't improve weakest goals by ≥0.5, the issue may be in the driver prompt, not the skills
+- **After P5**: If autonomous loop contributes >20% of improvement (vs current 5%), increase loop iterations; otherwise keep manual approach
