@@ -7,3 +7,6 @@ benchmarks/batch_*
 benchmarks/autoresearch_*.log
 benchmarks/batch_run.*
 benchmarks/batch.pid
+bin/sandbox/
+*.ipynb
+DRIVER_MESSAGE.md
