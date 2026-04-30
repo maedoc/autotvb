@@ -64,6 +64,7 @@ execute_notebook() {
     local out_nb="$(dirname "$nb_abs")/$(basename "${nb%.ipynb}_executed.ipynb")"
     (
         source /tmp/tvb_env/bin/activate
+        export OPENBLAS_NUM_THREADS=1
         python3 -m nbconvert --ExecutePreprocessor.timeout=180 --to notebook \
             --execute "$nb_abs" \
             --output "$out_nb" \

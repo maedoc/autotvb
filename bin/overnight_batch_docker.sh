@@ -108,13 +108,14 @@ for i in "${!ALL_GOALS[@]}"; do
         --memory="$MEMORY_LIMIT" \
         --memory-swap="$MEMORY_LIMIT" \
         --cpus="2" \
-        --pids-limit=50 \
+        --pids-limit=256 \
         --network="$NETWORK" \
         --hostname="$slug" \
         --stop-timeout=300 \
         -e "PI_MODEL=$PI_MODEL" \
         -e "MAX_TURNS=$MAX_TURNS" \
         -e "TZ=Europe/Berlin" \
+        -e "OPENBLAS_NUM_THREADS=1" \
         -v "$REPO_DIR:/app" \
         -v "/tmp/tvb_env:/opt/tvb_env:ro" \
         -v "$HOME/.pi/agent:/root/.pi/agent:ro" \
