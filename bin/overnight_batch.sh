@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# overnight_batch.sh — Run all 10 paper-grounded research goals
-# Usage: overnight_batch.sh
+# overnight_batch.sh — Fresh full sweep over ALL goals (existing + research)
+# Uses background jobs + wait -n for true 2-worker concurrency.
+# Usage: PI_MODEL=ollama/kimi-k2.6:cloud bash bin/overnight_batch.sh
 
 set -uo pipefail
 
@@ -8,88 +9,96 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_DIR"
 
-BATCH_DIR="$REPO_DIR/sandbox/batch_research_$(date +%Y%m%d_%H%M%S)"
+BATCH_DIR="$REPO_DIR/sandbox/batch_all_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$BATCH_DIR"
 
-GOALS=(
-    "benchmarks/goals_research/vep_epileptor_permittivity.GOAL.md"
-    "benchmarks/goals_research/alzheimers_abeta_ei.GOAL.md"
-    "benchmarks/goals_research/depression_gaba_tep.GOAL.md"
-    "benchmarks/goals_research/depression_rtms_wilsoncowan.GOAL.md"
-    "benchmarks/goals_research/schizophrenia_nrg1_ei.GOAL.md"
-    "benchmarks/goals_research/stroke_sj3d_bold.GOAL.md"
-    "benchmarks/goals_research/tdcs_fc_modulation.GOAL.md"
-    "benchmarks/goals_research/tumor_virtual_resection.GOAL.md"
-    "benchmarks/goals_research/epilepsy_bayesian_fitting.GOAL.md"
-    "benchmarks/goals_research/parameter_space_exploration.GOAL.md"
-)
+# ─── ALL GOALS ────────────────────────────────────────────────────
+EXISTING_GOALS=($(find benchmarks/goals -name '*.GOAL.md' | sort))
+RESEARCH_GOALS=($(find benchmarks/goals_research -name '*.GOAL.md' | sort))
+ALL_GOALS=("${EXISTING_GOALS[@]}" "${RESEARCH_GOALS[@]}")
 
-NAMES=(
-    "vep"
-    "alzheimers"
-    "gaba_tep"
-    "rtms"
-    "nrg1"
-    "stroke"
-    "tdcs"
-    "tumor"
-    "bayesian"
-    "param_sweep"
-)
+echo "=== Fresh Full Sweep ==="
+echo "Existing goals: ${#EXISTING_GOALS[@]}"
+echo "Research goals: ${#RESEARCH_GOALS[@]}"
+echo "Total: ${#ALL_GOALS[@]}"
+echo "Batch dir: $BATCH_DIR"
+echo ""
 
-# Global timeout: 2 hours per trial (7200 seconds)
+# Generate safe names
+NAMES=()
+for goal in "${ALL_GOALS[@]}"; do
+    base=$(basename "$goal" .GOAL.md)
+    safe=$(echo "$base" | sed 's/-/_/g' | cut -c1-30)
+    NAMES+=("$safe")
+done
+
 GLOBAL_TIMEOUT=7200
-
-# Default model (override with env var)
 PI_MODEL="${PI_MODEL:-ollama/kimi-k2.6:cloud}"
 export PI_MODEL
 echo "Model: $PI_MODEL"
-MAX_TURNS=5
 
-echo "=== Overnight Batch: Research Goals ==="
-echo "Batch dir: $BATCH_DIR"
-echo "Goals: ${#GOALS[@]}"
+MAX_TURNS=3
 echo "Max turns: $MAX_TURNS"
-echo "Global timeout per trial: ${GLOBAL_TIMEOUT}s"
+echo "Workers: 2"
 echo ""
 
-# Launch all trials in tmux sessions
-for i in "${!GOALS[@]}"; do
-    goal="${GOALS[$i]}"
+# Track background PIDs for concurrency
+PIDS=()
+
+for i in "${!ALL_GOALS[@]}"; do
+    goal="${ALL_GOALS[$i]}"
     name="${NAMES[$i]}"
     dir="$BATCH_DIR/$name"
     mkdir -p "$dir"
-    
-    # Pre-copy goal for reference
     cp "$goal" "$dir/GOAL.md"
     
-    session="batch_research_${name}"
-    tmux new-session -d -s "$session" \
-        "cd '${REPO_DIR}' && timeout ${GLOBAL_TIMEOUT} bash bin/run_trial.sh \"$goal\" ${MAX_TURNS} \"\$dir\" > \"\$dir/trial.log\" 2>&1; echo '=== BATCH_TRIAL_DONE status=$? ===' >> \"\$dir/trial.log\""    
-    echo "Launched $name (tmux: $session)"
+    # Launch trial in background, capture PID
+    (
+        PI_MODEL="$PI_MODEL" timeout $GLOBAL_TIMEOUT bash bin/run_trial.sh "$goal" $MAX_TURNS "$dir" > "$dir/trial.log" 2>&1
+        echo "=== BATCH_TRIAL_DONE status=$? ===" >> "$dir/trial.log"
+    ) &
+    pid=$!
+    PIDS+=("$pid")
+    echo "Launched [$((i+1))/${#ALL_GOALS[@]}] $name (pid: $pid)"
+    
+    # 2-worker limit
+    if [ "${#PIDS[@]}" -ge 2 ]; then
+        wait -n
+        # Remove finished PIDs
+        NEWPIDS=()
+        for p in "${PIDS[@]}"; do
+            if kill -0 "$p" 2>/dev/null; then
+                NEWPIDS+=("$p")
+            fi
+        done
+        PIDS=("${NEWPIDS[@]}")
+    fi
+done
+
+# Wait for remaining
+echo ""
+echo "Waiting for ${#PIDS[@]} remaining trials..."
+for p in "${PIDS[@]}"; do
+    wait "$p"
 done
 
 echo ""
-echo "All ${#GOALS[@]} trials launched."
+echo "All ${#ALL_GOALS[@]} trials completed."
 echo "Poll with: bash bin/poll_batch.sh $BATCH_DIR"
 echo ""
 
-# Write batch metadata
-cat > "$BATCH_DIR/batch.json" <<EOF
+# Batch metadata
 {
-  "batch_type": "paper_grounded_research",
-  "timestamp": "$(date -Iseconds)",
-  "goals_count": ${#GOALS[@]},
-  "max_turns": $MAX_TURNS,
-  "timeout_seconds": $GLOBAL_TIMEOUT,
-  "git_commit": "$(git rev-parse --short HEAD)",
-  "goals": [
-$(for i in "${!NAMES[@]}"; do
-    echo "    {\"name\": \"${NAMES[$i]}\", \"goal_file\": \"${GOALS[$i]}\"}${SEP:-}"
-    SEP=","
-done)
-  ]
-}
-EOF
+    echo '{'
+    echo "  \"batch_type\": \"full_sweep\","
+    echo "  \"timestamp\": \"$(date -Iseconds)\","
+    echo "  \"goals_count\": ${#ALL_GOALS[@]},"
+    echo "  \"existing_count\": ${#EXISTING_GOALS[@]},"
+    echo "  \"research_count\": ${#RESEARCH_GOALS[@]},"
+    echo "  \"max_turns\": $MAX_TURNS,"
+    echo "  \"timeout_seconds\": $GLOBAL_TIMEOUT,"
+    echo "  \"git_commit\": \"$(git rev-parse --short HEAD)\""
+    echo '}'
+} > "$BATCH_DIR/batch.json"
 
-echo "Batch metadata written to $BATCH_DIR/batch.json"
+echo "Batch metadata: $BATCH_DIR/batch.json"
