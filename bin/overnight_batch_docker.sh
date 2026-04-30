@@ -116,13 +116,13 @@ for i in "${!ALL_GOALS[@]}"; do
         -e "MAX_TURNS=$MAX_TURNS" \
         -e "TZ=Europe/Berlin" \
         -e "OPENBLAS_NUM_THREADS=1" \
+        -e "TVB_ENV_PATH=/opt/tvb_env" \
         -v "$REPO_DIR:/app" \
         -v "/tmp/tvb_env:/opt/tvb_env:ro" \
         -v "$HOME/.pi/agent:/root/.pi/agent:ro" \
         --entrypoint bash \
         "$IMAGE" \
         -c "
-            set -uo pipefail
             cd /app
             # Ensure TVB venv is active
             export PATH=/opt/tvb_env/bin:\$PATH
