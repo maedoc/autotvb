@@ -90,6 +90,12 @@ echo ""
 
 # Batch metadata
 {
+    local mem_avail
+    mem_avail=$(grep MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "null")
+    local mem_total
+    mem_total=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "null")
+    local loadavg
+    loadavg=$(cat /proc/loadavg 2>/dev/null | awk '{print $1}' || echo "null")
     echo '{'
     echo "  \"batch_type\": \"full_sweep\","
     echo "  \"timestamp\": \"$(date -Iseconds)\","
@@ -97,8 +103,12 @@ echo ""
     echo "  \"existing_count\": ${#EXISTING_GOALS[@]},"
     echo "  \"research_count\": ${#RESEARCH_GOALS[@]},"
     echo "  \"max_turns\": $MAX_TURNS,"
+    echo "  \"max_concurrent\": $MAX_CONCURRENT,"
     echo "  \"timeout_seconds\": $GLOBAL_TIMEOUT,"
-    echo "  \"git_commit\": \"$(git rev-parse --short HEAD)\""
+    echo "  \"git_commit\": \"$(git rev-parse --short HEAD)\","
+    echo "  \"host_mem_total_kb\": $mem_total,"
+    echo "  \"host_mem_avail_kb\": $mem_avail,"
+    echo "  \"host_loadavg_1m\": $loadavg"
     echo '}'
 } > "$BATCH_DIR/batch.json"
 

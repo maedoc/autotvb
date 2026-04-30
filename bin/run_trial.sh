@@ -74,10 +74,36 @@ execute_notebook() {
     echo "--- Execution finished at $(date -Iseconds) ---" >> "$out"
 }
 
+# ─── Helper: log resource snapshot ───────────────────────────────────
+log_resources() {
+    local label="$1"
+    local ts
+    ts=$(date -Iseconds)
+    local loadavg
+    loadavg=$(cat /proc/loadavg 2>/dev/null | awk '{print $1}' || echo "null")
+    local mem_avail
+    mem_avail=$(grep MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "null")
+    local mem_total
+    mem_total=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "null")
+    local rss_kb
+    rss_kb=$(ps -o rss= -p $$ 2>/dev/null | tr -d ' ' || echo "null")
+    local pi_count pi_rss
+    pi_count=$(ps -eo comm | grep -cx 'pi' 2>/dev/null || echo "0")
+    pi_rss=$(ps -eo rss,comm | awk '$2=="pi" {sum+=$1} END {print sum+0}' 2>/dev/null || echo "0")
+
+    cat >> "$TRIAL_DIR/resources.log" <<JSON
+{"timestamp":"$ts","label":"$label","loadavg_1m":$loadavg,"mem_avail_kb":$mem_avail,"mem_total_kb":$mem_total,"proc_rss_kb":$rss_kb,"pi_procs":$pi_count,"pi_rss_kb":$pi_rss}
+JSON
+echo "" >> "$TRIAL_DIR/resources.log"
+}
+
 # Turn loop
+log_resources "trial_start"
+
 for turn in $(seq 1 "$MAX_TURNS"); do
     echo ""
     echo "--- Turn $turn ---"
+    log_resources "turn_${turn}_start"
 
     # ─── DRIVER WRITE turn ─────────────────────────────────────────
     echo "[DRIVER] Writing notebook..."
@@ -99,9 +125,11 @@ for turn in $(seq 1 "$MAX_TURNS"); do
     fi
 
     # ─── LOCAL EXECUTION ──────────────────────────────────────────
+    log_resources "turn_${turn}_pre_exec"
     echo "[EXEC] Running notebook with TVB venv..."
     > "$EXEC_LOG"
     execute_notebook "$RESULT_NOTEBOOK" "$EXEC_LOG"
+    log_resources "turn_${turn}_post_exec"
 
     # Build execution report
     EXEC_STATUS="Success"
@@ -158,6 +186,7 @@ echo "Notebook: $RESULT_NOTEBOOK"
 echo "Navigator final message: $NAVIGATOR_MSG"
 echo "Driver final message: $DRIVER_MSG"
 echo "Turns used: $turn"
+log_resources "trial_end"
 
 # ─── EVALUATION ─────────────────────────────────────────────────
 if [ -f "$RESULT_NOTEBOOK" ]; then

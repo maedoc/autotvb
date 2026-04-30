@@ -17,6 +17,28 @@ GOAL="${2:-benchmarks/goals/visual_erp.GOAL.md}"
 TRIAL_DIR="$(dirname "$(realpath "$NOTEBOOK")")"
 RESULT_FILE="${3:-$TRIAL_DIR/evaluation.json}"
 
+# ─── Resource snapshot helper ──────────────────────────────────────
+log_eval_resources() {
+    local label="$1"
+    local ts
+    ts=$(date -Iseconds)
+    local loadavg
+    loadavg=$(cat /proc/loadavg 2>/dev/null | awk '{print $1}' || echo "null")
+    local mem_avail
+    mem_avail=$(grep MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "null")
+    local rss_kb
+    rss_kb=$(ps -o rss= -p $$ 2>/dev/null | tr -d ' ' || echo "null")
+    local pi_count pi_rss
+    pi_count=$(ps -eo comm | grep -cx 'pi' 2>/dev/null || echo "0")
+    pi_rss=$(ps -eo rss,comm | awk '$2=="pi" {sum+=$1} END {print sum+0}' 2>/dev/null || echo "0")
+    cat >> "$TRIAL_DIR/resources.log" <<JSON
+{"timestamp":"$ts","label":"$label","loadavg_1m":$loadavg,"mem_avail_kb":$mem_avail,"proc_rss_kb":$rss_kb,"pi_procs":$pi_count,"pi_rss_kb":$pi_rss}
+JSON
+echo "" >> "$TRIAL_DIR/resources.log"
+}
+
+log_eval_resources "eval_start"
+
 GOAL_TEXT=$(cat "$GOAL")
 
 # Convert notebook to script for inspection
@@ -118,6 +140,8 @@ if [ "$EVAL_SIZE" -lt 50 ] || [ "$EVAL_CONTENT" = '{}' ] || [ "$EVAL_CONTENT" = 
 FALLBACK
     echo "WARNING: Empty or trivial evaluation detected ($EVAL_SIZE bytes). Wrote fallback score=0.0" >&2
 fi
+
+log_eval_resources "eval_end"
 
 echo "Evaluation written to $RESULT_FILE"
 cat "$RESULT_FILE"
