@@ -107,7 +107,7 @@ for turn in $(seq 1 "$MAX_TURNS"); do
 
     # ─── DRIVER WRITE turn ─────────────────────────────────────────
     echo "[DRIVER] Writing notebook..."
-    DRIVER_OUTPUT=$(timeout 300 pi \
+    timeout --foreground -k 30 300 pi \
         $MODEL_FLAG \
         --mode text \
         --no-session \
@@ -115,8 +115,7 @@ for turn in $(seq 1 "$MAX_TURNS"); do
         $SKILL_FLAGS \
         --system-prompt "$DRIVER_PROMPT" \
         -p "NAVIGATOR MESSAGE:\n$(cat $NAVIGATOR_MSG)\n\nYour task: implement or extend the notebook in $RESULT_NOTEBOOK inside $TRIAL_DIR. After writing the notebook, do NOT execute it. Instead, report what you wrote, what changed, and any concerns." \
-        2>&1 || true)
-    echo "$DRIVER_OUTPUT" > "$DRIVER_MSG"
+        > "$DRIVER_MSG" 2>&1 || true
 
     # Check for TERMINATE from driver
     if grep -q "TERMINATE" "$DRIVER_MSG" 2>/dev/null; then
@@ -150,7 +149,7 @@ EOF
 
     # ─── DRIVER FIX/REPORT turn ──────────────────────────────────
     echo "[DRIVER] Reviewing execution results..."
-    DRIVER_OUTPUT=$(timeout 300 pi \
+    timeout --foreground -k 30 300 pi \
         $MODEL_FLAG \
         --mode text \
         --no-session \
@@ -158,12 +157,11 @@ EOF
         $SKILL_FLAGS \
         --system-prompt "$DRIVER_PROMPT" \
         -p "NAVIGATOR MESSAGE:\n$(cat $NAVIGATOR_MSG)\n\nYOUR PREVIOUS DRIVER MESSAGE:\n$(cat $DRIVER_MSG)\n\nEXECUTION REPORT:\n$(cat $EXEC_REPORT)\n\nYour task: fix any errors in $RESULT_NOTEBOOK, or if execution succeeded, confirm completion. Report results." \
-        2>&1 || true)
-    echo "$DRIVER_OUTPUT" > "$DRIVER_MSG"
+        > "$DRIVER_MSG" 2>&1 || true
 
     # ─── NAVIGATOR turn ──────────────────────────────────────────
     echo "[NAVIGATOR] Running..."
-    NAVIGATOR_OUTPUT=$(timeout 300 pi \
+    timeout --foreground -k 30 300 pi \
         $MODEL_FLAG \
         --mode text \
         --no-session \
@@ -171,8 +169,7 @@ EOF
         $SKILL_FLAGS \
         --system-prompt "$NAVIGATOR_PROMPT" \
         -p "DRIVER MESSAGE:\n$(cat $DRIVER_MSG)\n\nGOAL:\n$(cat $TRIAL_DIR/GOAL.md)\n\nYour task: review the driver's output. If the notebook is complete and correct, write TERMINATE to $NAVIGATOR_MSG with a verdict. Otherwise, provide the next step." \
-        2>&1 || true)
-    echo "$NAVIGATOR_OUTPUT" > "$NAVIGATOR_MSG"
+        > "$NAVIGATOR_MSG" 2>&1 || true
 
     if grep -q "TERMINATE" "$NAVIGATOR_MSG" 2>/dev/null; then
         echo "[NAVIGATOR] TERMINATE received after turn $turn"

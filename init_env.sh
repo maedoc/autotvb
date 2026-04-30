@@ -9,7 +9,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # inside the repo where paths are predictable.
 cd "$SCRIPT_DIR"
 
-VENV_PATH="${1:-/tmp/tvb_env}"
+VENV_ARG="${1:-}"
+# If arg looks like a command (starts with special chars or 'bash'), ignore it
+if [ -n "$VENV_ARG" ] && [ -d "$VENV_ARG" ] 2>/dev/null; then
+    VENV_PATH="$VENV_ARG"
+else
+    VENV_PATH="/tmp/tvb_env"
+fi
 PYTHON="${PYTHON:-python3}"
 
 echo "=== Autotvb Environment Init ==="

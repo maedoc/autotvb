@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     npm \
     build-essential \
     libgfortran5 \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pi CLI globally (Node.js tool)
