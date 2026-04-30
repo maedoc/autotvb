@@ -6,7 +6,7 @@ if [ -n "$PI_MODEL" ]; then
     echo "[EVAL] Using model: $PI_MODEL (via env var)"
     echo "[MODEL] Using: $PI_MODEL" >&2
 fi
-set -euo pipefail
+set -uo pipefail
 
 # evaluate.sh — Independent LLM evaluation of a trial notebook
 echo "=== Evaluator ==="
