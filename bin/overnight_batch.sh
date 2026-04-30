@@ -38,8 +38,9 @@ export PI_MODEL
 echo "Model: $PI_MODEL"
 
 MAX_TURNS=3
+MAX_CONCURRENT="${MAX_CONCURRENT:-4}"
 echo "Max turns: $MAX_TURNS"
-echo "Workers: 2"
+echo "Workers: $MAX_CONCURRENT"
 echo ""
 
 # Track background PIDs for concurrency
@@ -61,8 +62,8 @@ for i in "${!ALL_GOALS[@]}"; do
     PIDS+=("$pid")
     echo "Launched [$((i+1))/${#ALL_GOALS[@]}] $name (pid: $pid)"
     
-    # 2-worker limit
-    if [ "${#PIDS[@]}" -ge 2 ]; then
+    # $MAX_CONCURRENT-worker limit
+    if [ "${#PIDS[@]}" -ge "$MAX_CONCURRENT" ]; then
         wait -n
         # Remove finished PIDs
         NEWPIDS=()
