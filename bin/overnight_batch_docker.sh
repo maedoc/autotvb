@@ -72,6 +72,10 @@ for i in "${!ALL_GOALS[@]}"; do
     # Unique container slug: autotvb-<name>-<timestamp>-<idx>
     slug="autotvb-${name}-${TIMESTAMP}-$((i+1))"
 
+    # Convert host path to container path (replace $REPO_DIR prefix with /app)
+    container_goal="${goal/#$REPO_DIR//app}"
+    container_dir="${dir/#$REPO_DIR//app}"
+
     # Limit concurrent containers
     if [ "${#CONTAINERS[@]}" -ge "$MAX_CONCURRENT" ]; then
         echo "[WAIT] Max concurrent ($MAX_CONCURRENT) reached, waiting..."
@@ -110,6 +114,7 @@ for i in "${!ALL_GOALS[@]}"; do
         -e "TZ=Europe/Berlin" \
         -v "$REPO_DIR:/app" \
         -v "/tmp/tvb_env:/opt/tvb_env:ro" \
+        -v "$HOME/.pi/agent:/root/.pi/agent:ro" \
         --entrypoint bash \
         "$IMAGE" \
         -c "
@@ -118,9 +123,9 @@ for i in "${!ALL_GOALS[@]}"; do
             # Ensure TVB venv is active
             export PATH=/opt/tvb_env/bin:\$PATH
             # Run trial
-            bash bin/run_trial.sh '$goal' $MAX_TURNS '$dir' > '$dir/trial.log' 2>&1
+            bash bin/run_trial.sh '$container_goal' $MAX_TURNS '$container_dir' > '$container_dir/trial.log' 2>&1
             exit_code=\$?
-            echo '=== BATCH_TRIAL_DONE status=\$exit_code ===' >> '$dir/trial.log'
+            echo '=== BATCH_TRIAL_DONE status=\$exit_code ===' >> '$container_dir/trial.log'
             exit \$exit_code
         " > /dev/null 2>&1
 
@@ -150,11 +155,8 @@ echo ""
 
 # Batch metadata
 {
-    local mem_avail
     mem_avail=$(grep MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "null")
-    local mem_total
     mem_total=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "null")
-    local loadavg
     loadavg=$(cat /proc/loadavg 2>/dev/null | awk '{print $1}' || echo "null")
     echo '{'
     echo "  \"batch_type\": \"docker_full_sweep\","
