@@ -100,33 +100,65 @@ $GOAL_TEXT
 $NB_TEXT
 EOF
 
-RESULT=$(timeout "$EVAL_TIMEOUT" pi \
+RESULT=$(timeout --foreground -k 30 "$EVAL_TIMEOUT" pi \
     $MODEL_FLAG \
     --mode text \
     --no-session \
     --tools read,bash \
     -p "$(cat "$TRIAL_DIR/.eval_prompt.txt")" \
-    2>&1 || true)
+    2>"$TRIAL_DIR/.eval_stderr.txt" || true)
 
-# Try to extract JSON — handle markdown fences
+# Save raw output immediately (stdout only; stderr already redirected)
 echo "$RESULT" > "$TRIAL_DIR/.eval_raw.txt"
 
-# Extract JSON between { and }
-python3 -c "
-import sys, re
-text = sys.stdin.read()
-# Try to find JSON block
-m = re.search(r'\{.*\}', text, re.DOTALL)
-if m:
-    try:
-        import json
-        data = json.loads(m.group())
-        print(json.dumps(data))
-    except:
-        pass
-" < "$TRIAL_DIR/.eval_raw.txt" > "$RESULT_FILE" 2>/dev/null || true
+# Extract JSON with balanced-brace parsing and multiple fallbacks
+python3 <<'PY' "$TRIAL_DIR/.eval_raw.txt" > "$RESULT_FILE" 2>"$TRIAL_DIR/.eval_pyerr.txt"
+import sys, re, json
 
-# If extraction failed, keep raw
+path = sys.argv[1]
+with open(path, 'r', encoding='utf-8', errors='replace') as f:
+    text = f.read()
+
+# Strategy 1: find JSON between balanced braces (with tolerance for unbalanced)
+data = None
+for m in re.finditer(r'\{', text):
+    start = m.start()
+    depth = 0
+    for i in range(start, min(len(text), start + 10000)):
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            depth -= 1
+            if depth == 0:
+                try:
+                    candidate = text[start:i+1]
+                    data = json.loads(candidate)
+                    break
+                except json.JSONDecodeError:
+                    continue
+    if data is not None:
+        break
+
+# Strategy 2: if none found, look for simple quoted JSON block
+if data is None:
+    m = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+    if m:
+        try:
+            data = json.loads(m.group())
+        except:
+            pass
+
+if data is not None:
+    # Ensure required keys
+    for k in ['correctness','code_quality','scientific_validity','token_efficiency','scalar_score','justification']:
+        if k not in data:
+            data[k] = 0 if k != 'justification' else 'auto-fallback'
+    json.dump(data, sys.stdout)
+else:
+    print('{}')
+PY
+
+# If extraction failed completely, keep raw for inspection
 if [ ! -s "$RESULT_FILE" ]; then
     echo '{}' > "$RESULT_FILE"
 fi

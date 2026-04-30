@@ -20,7 +20,7 @@ ALL_GOALS=("${EXISTING_GOALS[@]}" "${RESEARCH_GOALS[@]}")
 # ─── CONFIG ──────────────────────────────────────────────────────
 PI_MODEL="${PI_MODEL:-ollama/kimi-k2.6:cloud}"
 MAX_TURNS=3
-MAX_CONCURRENT="${MAX_CONCURRENT:-4}"
+MAX_CONCURRENT="${MAX_CONCURRENT:-5}"
 MEMORY_LIMIT="${MEMORY_LIMIT:-4g}"
 CONTAINER_TIMEOUT="${CONTAINER_TIMEOUT:-7200}"
 IMAGE="${AUTOTVB_IMAGE:-autotvb:latest}"
@@ -112,7 +112,6 @@ for i in "${!ALL_GOALS[@]}"; do
         -v "/tmp/tvb_env:/opt/tvb_env:ro" \
         --entrypoint bash \
         "$IMAGE" \
-        "bash" \
         -c "
             set -uo pipefail
             cd /app

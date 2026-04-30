@@ -11,10 +11,19 @@ if [ ! -d "$BATCH_DIR" ]; then
 fi
 
 NAMES=($(python3 -c "
-import json
-with open('$BATCH_DIR/batch.json') as f:
-    d = json.load(f)
-    print(' '.join([g['name'] for g in d['goals']]))
+import json, sys, os
+batch_json = os.path.join('$BATCH_DIR', 'batch.json')
+if os.path.exists(batch_json):
+    with open(batch_json) as f:
+        d = json.load(f)
+    if 'goals' in d:
+        print(' '.join([g['name'] for g in d['goals']]))
+    else:
+        subs = [x for x in os.listdir('$BATCH_DIR') if os.path.isdir(os.path.join('$BATCH_DIR',x)) and not x.startswith('.') and x != 'batch.json']
+        print(' '.join(subs))
+else:
+    subs = [x for x in os.listdir('$BATCH_DIR') if os.path.isdir(os.path.join('$BATCH_DIR',x)) and not x.startswith('.') and x != 'batch.json']
+    print(' '.join(subs))
 "))
 
 poll_once() {
@@ -26,17 +35,28 @@ poll_once() {
     completed=0
     total=${#NAMES[@]}
     
-    printf "%-12s %-10s %-8s %-8s %-8s %-10s %s\n" "Goal" "Notebook" "Turns" "Message" "Exec" "Status" "Notes"
+    # Check for Docker batch
+    is_docker=false
+    if python3 -c "import json, os; p=os.path.join('$BATCH_DIR','batch.json'); print(d.get('image','')) if os.path.exists(p) else ''" 2>/dev/null | grep -q autotvb; then
+        is_docker=true
+    fi
+    
+    if [ "$is_docker" = true ]; then
+        printf "%-12s %-10s %-8s %-8s %-8s %-10s %-15s %s\n" "Goal" "Notebook" "Turns" "Message" "Exec" "Status" "Container" "Notes"
+    else
+        printf "%-12s %-10s %-8s %-8s %-8s %-10s %s\n" "Goal" "Notebook" "Turns" "Message" "Exec" "Status" "Notes"
+    fi
     echo "--------------------------------------------------------------------------------"
     
     for name in "${NAMES[@]}"; do
         dir="$BATCH_DIR/$name"
-        nb="$([ -f "$dir/workflow.ipynb" ] && echo $(wc -c <"$dir/workflow.ipynb") || echo 0)"
-        msg="$([ -f "$dir/DRIVER_MESSAGE.md" ] && echo $(wc -c <"$dir/DRIVER_MESSAGE.md") || echo 0)"
-        exec="$([ -f "$dir/EXECUTION_REPORT.md" ] && echo $(wc -c <"$dir/EXECUTION_REPORT.md") || echo 0)"
+        nb="$([ -f \"$dir/workflow.ipynb\" ] && echo $(wc -c <"$dir/workflow.ipynb") || echo 0)"
+        msg="$([ -f \"$dir/DRIVER_MESSAGE.md\" ] && echo $(wc -c <"$dir/DRIVER_MESSAGE.md") || echo 0)"
+        exec="$([ -f \"$dir/EXECUTION_REPORT.md\" ] && echo $(wc -c <"$dir/EXECUTION_REPORT.md") || echo 0)"
         turns=$(grep -c "Turn [0-9]" "$dir/trial.log" 2>/dev/null || echo 0)
         status="running"
         notes=""
+        container_status=""
         
         if grep -q "BATCH_TRIAL_DONE" "$dir/trial.log" 2>/dev/null; then
             status="COMPLETED"
@@ -44,6 +64,8 @@ poll_once() {
             if [ "$nb" -gt 0 ] && [ "$exec" -gt 0 ]; then
                 exec_status=$(head -n2 "$dir/EXECUTION_REPORT.md" 2>/dev/null | grep -o "Success\|Error" || echo "?")
                 notes="exec=$exec_status"
+            elif [ "$nb" -gt 0 ]; then
+                notes="nb ok, no exec log"
             else
                 notes="no notebook"
             fi
@@ -53,13 +75,27 @@ poll_once() {
             notes="early terminate"
         fi
         
+        if [ "$is_docker" = true ]; then
+            container=$(docker ps --filter "name=autotvb-$name" --format "{{.Names}}:{{.Status}}" 2>/dev/null | grep -v "^$" | head -n1)
+            if [ -n "$container" ]; then
+                container_status="$container"
+                notes="container active"
+            elif [ "$status" != "COMPLETED" ]; then
+                container_status="exited"
+            fi
+        fi
+        
         if [ "$nb" -gt 0 ]; then
             nb_str="yes"
         else
             nb_str="no"
         fi
         
-        printf "%-12s %-10s %-8s %-8s %-8s %-10s %s\n" "$name" "$nb_str" "$turns" "$msg" "$exec" "$status" "$notes"
+        if [ "$is_docker" = true ]; then
+            printf "%-12s %-10s %-8s %-8s %-8s %-10s %-15s %s\n" "${name:0:12}" "$nb_str" "$turns" "$msg" "$exec" "$status" "${container_status:0:15}" "$notes"
+        else
+            printf "%-12s %-10s %-8s %-8s %-8s %-10s %s\n" "${name:0:12}" "$nb_str" "$turns" "$msg" "$exec" "$status" "$notes"
+        fi
     done
     
     echo ""
