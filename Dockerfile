@@ -8,12 +8,19 @@ FROM python:3.11-slim-bookworm
 LABEL maintainer="autotvb" \
       description="Autonomous TVB skill-creation architecture"
 
-# Install system dependencies
+# Install Node.js 20 (pi CLI needs Node >=20) and system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
     curl \
+    ca-certificates \
+    gnupg \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update \
+    && apt-get remove -y nodejs npm || true \
+    && apt-get install -y --no-install-recommends \
     nodejs \
-    npm \
+    git \
     build-essential \
     libgfortran5 \
     procps \
