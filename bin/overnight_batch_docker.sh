@@ -79,20 +79,23 @@ for i in "${!ALL_GOALS[@]}"; do
     # Limit concurrent containers
     if [ "${#CONTAINERS[@]}" -ge "$MAX_CONCURRENT" ]; then
         echo "[WAIT] Max concurrent ($MAX_CONCURRENT) reached, waiting..."
-        # Wait for at least one container to finish
-        docker wait "${CONTAINERS[0]}" >/dev/null 2>&1 || true
-        # Remove finished containers from tracking
-        NEW_CONTAINERS=()
-        for c in "${CONTAINERS[@]}"; do
-            if docker inspect "$c" >/dev/null 2>&1; then
-                # Check if still running
-                status=$(docker inspect -f '{{.State.Status}}' "$c" 2>/dev/null)
+        # Poll until at least one container slot frees up
+        while true; do
+            NEW_CONTAINERS=()
+            for c in "${CONTAINERS[@]}"; do
+                # With --rm, container is removed after exit,
+                # so 'docker inspect' failure means it's done
+                status=$(docker inspect -f '{{.State.Status}}' "$c" 2>/dev/null) || status="gone"
                 if [ "$status" = "running" ] || [ "$status" = "created" ] || [ "$status" = "restarting" ]; then
                     NEW_CONTAINERS+=("$c")
                 fi
+            done
+            CONTAINERS=("${NEW_CONTAINERS[@]}")
+            if [ "${#CONTAINERS[@]}" -lt "$MAX_CONCURRENT" ]; then
+                break
             fi
+            sleep 10
         done
-        CONTAINERS=("${NEW_CONTAINERS[@]}")
         echo "[WAIT] Now ${#CONTAINERS[@]} containers running"
     fi
 
