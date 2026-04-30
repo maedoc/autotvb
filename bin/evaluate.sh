@@ -2,9 +2,8 @@
 
 # ─── Model override ────────────────────────────────────────────────
 PI_MODEL="${PI_MODEL:-}"
-MODEL_FLAG=""
 if [ -n "$PI_MODEL" ]; then
-    MODEL_FLAG="--model $PI_MODEL"
+    echo "[EVAL] Using model: $PI_MODEL (via env var)"
     echo "[MODEL] Using: $PI_MODEL" >&2
 fi
 set -euo pipefail
@@ -101,7 +100,6 @@ $NB_TEXT
 EOF
 
 RESULT=$(timeout --foreground -k 30 "$EVAL_TIMEOUT" pi \
-    $MODEL_FLAG \
     --mode text \
     --no-session \
     --tools read,bash \

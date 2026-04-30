@@ -17,10 +17,8 @@ echo "[SKILLS] Loaded: $(echo "$SKILL_FLAGS" | tr '\n' ' ')"
 
 # ─── Model override ────────────────────────────────────────────────
 PI_MODEL="${PI_MODEL:-}"
-MODEL_FLAG=""
 if [ -n "$PI_MODEL" ]; then
-    MODEL_FLAG="--model $PI_MODEL"
-    echo "[MODEL] Using: $PI_MODEL"
+    echo "[MODEL] Using: $PI_MODEL (via env var)"
 fi
 # ─── Conversation state ────────────────────────────────────────────
 NAVIGATOR_MSG="$TRIAL_DIR/NAVIGATOR_MESSAGE.md"
@@ -108,14 +106,13 @@ for turn in $(seq 1 "$MAX_TURNS"); do
     # ─── DRIVER WRITE turn ─────────────────────────────────────────
     echo "[DRIVER] Writing notebook..."
     timeout --foreground -k 30 300 pi \
-        $MODEL_FLAG \
         --mode text \
         --no-session \
         --tools read,bash,write,edit \
         $SKILL_FLAGS \
         --system-prompt "$DRIVER_PROMPT" \
         -p "NAVIGATOR MESSAGE:\n$(cat $NAVIGATOR_MSG)\n\nYour task: implement or extend the notebook in $RESULT_NOTEBOOK inside $TRIAL_DIR. After writing the notebook, do NOT execute it. Instead, report what you wrote, what changed, and any concerns." \
-        > "$DRIVER_MSG" 2>&1 || true
+        > "$DRIVER_MSG" 2>"$TRIAL_DIR/.driver_stderr" || true
 
     # Check for TERMINATE from driver
     if grep -q "TERMINATE" "$DRIVER_MSG" 2>/dev/null; then
@@ -150,26 +147,24 @@ EOF
     # ─── DRIVER FIX/REPORT turn ──────────────────────────────────
     echo "[DRIVER] Reviewing execution results..."
     timeout --foreground -k 30 300 pi \
-        $MODEL_FLAG \
         --mode text \
         --no-session \
         --tools read,bash,write,edit \
         $SKILL_FLAGS \
         --system-prompt "$DRIVER_PROMPT" \
         -p "NAVIGATOR MESSAGE:\n$(cat $NAVIGATOR_MSG)\n\nYOUR PREVIOUS DRIVER MESSAGE:\n$(cat $DRIVER_MSG)\n\nEXECUTION REPORT:\n$(cat $EXEC_REPORT)\n\nYour task: fix any errors in $RESULT_NOTEBOOK, or if execution succeeded, confirm completion. Report results." \
-        > "$DRIVER_MSG" 2>&1 || true
+        > "$DRIVER_MSG" 2>"$TRIAL_DIR/.driver2_stderr" || true
 
     # ─── NAVIGATOR turn ──────────────────────────────────────────
     echo "[NAVIGATOR] Running..."
     timeout --foreground -k 30 300 pi \
-        $MODEL_FLAG \
         --mode text \
         --no-session \
         --tools read,bash \
         $SKILL_FLAGS \
         --system-prompt "$NAVIGATOR_PROMPT" \
         -p "DRIVER MESSAGE:\n$(cat $DRIVER_MSG)\n\nGOAL:\n$(cat $TRIAL_DIR/GOAL.md)\n\nYour task: review the driver's output. If the notebook is complete and correct, write TERMINATE to $NAVIGATOR_MSG with a verdict. Otherwise, provide the next step." \
-        > "$NAVIGATOR_MSG" 2>&1 || true
+        > "$NAVIGATOR_MSG" 2>"$TRIAL_DIR/.nav_stderr" || true
 
     if grep -q "TERMINATE" "$NAVIGATOR_MSG" 2>/dev/null; then
         echo "[NAVIGATOR] TERMINATE received after turn $turn"
