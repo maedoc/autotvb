@@ -158,3 +158,17 @@ echo "Notebook: $RESULT_NOTEBOOK"
 echo "Navigator final message: $NAVIGATOR_MSG"
 echo "Driver final message: $DRIVER_MSG"
 echo "Turns used: $turn"
+
+# ─── EVALUATION ─────────────────────────────────────────────────
+if [ -f "$RESULT_NOTEBOOK" ]; then
+    echo "[EVAL] Running evaluator..."
+    bash bin/evaluate.sh "$RESULT_NOTEBOOK" "$GOAL_FILE" "$TRIAL_DIR/evaluation.json" > "$TRIAL_DIR/eval.log" 2>&1 || true
+    if [ -f "$TRIAL_DIR/evaluation.json" ]; then
+        score=$(jq -r '.scalar_score // "N/A"' "$TRIAL_DIR/evaluation.json" 2>/dev/null)
+        echo "[EVAL] Score: $score"
+    else
+        echo "[EVAL] Failed — no evaluation.json produced"
+    fi
+else
+    echo "[EVAL] Skipped — no notebook found"
+fi
