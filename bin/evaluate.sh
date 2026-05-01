@@ -110,10 +110,10 @@ RESULT=$(timeout --foreground -k 30 "$EVAL_TIMEOUT" pi \
 echo "$RESULT" > "$TRIAL_DIR/.eval_raw.txt"
 
 # Extract JSON with balanced-brace parsing and multiple fallbacks
-python3 <<'PY' "$TRIAL_DIR/.eval_raw.txt" > "$RESULT_FILE" 2>"$TRIAL_DIR/.eval_pyerr.txt"
-import sys, re, json
+EVAL_RAW_PATH="$TRIAL_DIR/.eval_raw.txt" python3 <<'PY' > "$RESULT_FILE" 2>"$TRIAL_DIR/.eval_pyerr.txt"
+import sys, re, json, os
 
-path = sys.argv[1]
+path = os.environ['EVAL_RAW_PATH']
 with open(path, 'r', encoding='utf-8', errors='replace') as f:
     text = f.read()
 
