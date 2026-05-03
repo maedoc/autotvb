@@ -213,3 +213,42 @@ The real value isn't the autonomous loop YET — it's the **batch measurement sy
 **The loop is a nice-to-have; the measurement system is the must-have.** Future effort should prioritize:
 1. Closing the correctness gaps we now SEE (because of measurement)
 2. THEN running the loop to see if it can maintain gains across all 20 goals
+
+## Batch 3 — New Skills Validation (2026-05-03)
+
+### 3 new skills from failure pattern analysis
+- **simulation-duration** (2.4KB): Monitor-specific minimum durations, BOLD volume requirements
+- **concise-code** (1.9KB): Lean notebook patterns, no redundant plots/prints
+- **region-atlas** (3.9KB): Full 76-region Hagmann parcellation with neuroscience label mappings
+
+### Results: 4.50 / 5.0 (up from 4.16, +0.34)
+
+| Dimension | Batch 2 | Batch 3 | Delta |
+|-----------|---------|---------|-------|
+| correctness | 4.54 | 4.75 | +0.21 |
+| code_quality | 4.38 | 4.79 | +0.41 |
+| scientific_validity | 4.04 | 4.50 | +0.46 |
+| token_efficiency | 3.65 | 4.00 | +0.35 |
+
+### Biggest improvements (new skills targeted these)
+- visual-erp: 3.50 → 4.80 (+1.30)
+- alzheimers-abeta-ei: 3.30 → 4.50 (+1.20)
+- parameter-space-exploration: 3.50 → 4.50 (+1.00)
+- tumor-virtual-resection: 3.75 → 4.75 (+1.00)
+- exploring-the-bold-monitor: 4.00 → 4.75 (+0.75)
+
+### Regressions
+- depression-rtms-wilsoncowan: 4.20 → 2.60 (notebook crashed on sim.run() unpacking)
+- tdcs-fc-modulation: 4.05 → 3.50 (weak stimulation effect, same as previous batch)
+
+### Learnings
+- #18: Simulation-duration skill is the highest-leverage single skill — 7 goals had too-short sims
+- #19: Region-atlas prevents ValueError from nonexistent region names
+- #20: Concise-code nudges models toward better token_efficiency scores
+- #21: Two regressions were code-generation failures, not skill regressions
+- #22: Scientific validity improved +0.46 avg, validating "skills from measured failures" approach
+
+### Evaluator fixes
+- Python heredoc argv bug: `python3 <<'PY' $arg` tried to parse $arg as script → use ENV var
+- Truncated JSON: evaluator responses missing closing `}` → brace completion + regex fallback
+- Justification brevity: "one sentence" → "under 30 words" to prevent token-limit truncation
