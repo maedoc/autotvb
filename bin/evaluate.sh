@@ -85,9 +85,9 @@ When scoring correctness, PRIORITIZE whether the notebook ACTUALLY RAN without e
 - scientific_validity: Does the analysis answer the question with correct methods? (1-5)
 - token_efficiency: Concise without gratuitous extras? (1-5)
 
-Output ONLY a JSON object with no markdown, no code fences, no commentary:
+Output ONLY a JSON object — no markdown, no code fences, no commentary, no trailing text. The justification MUST be under 30 words:
 
-{"correctness": INT, "code_quality": INT, "scientific_validity": INT, "token_efficiency": INT, "scalar_score": FLOAT, "justification": "one sentence"}
+{"correctness": INT, "code_quality": INT, "scientific_validity": INT, "token_efficiency": INT, "scalar_score": FLOAT, "justification": "<30 words>"}
 PRMPT
 
 cat >> "$TRIAL_DIR/.eval_prompt.txt" <<EOF
