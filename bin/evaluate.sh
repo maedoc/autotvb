@@ -146,6 +146,34 @@ if data is None:
         except:
             pass
 
+# Strategy 3: truncated JSON — try appending closing braces
+if data is None:
+    # Find the last opening brace and try to complete it
+    m = re.search(r'\{', text)
+    if m:
+        start = m.start()
+        candidate = text[start:].rstrip()
+        # Try progressively adding closing braces
+        for suffix in ['}', '"}}', '"}]}}']:
+            try:
+                data = json.loads(candidate + suffix)
+                break
+            except json.JSONDecodeError:
+                continue
+        # If still failing, try regex-based extraction of scored fields
+        if data is None:
+            scores = {}
+            for key in ['correctness','code_quality','scientific_validity','token_efficiency','scalar_score']:
+                m2 = re.search(rf'"{key}"\s*:\s*(\d+\.?\d*)', candidate)
+                if m2:
+                    scores[key] = float(m2.group(1))
+                else:
+                    scores[key] = 0
+            just_m = re.search(r'"justification"\s*:\s*"([^"]*)', candidate)
+            scores['justification'] = just_m.group(1) if just_m else 'extracted from truncated response'
+            if len(scores) == 6:
+                data = scores
+
 if data is not None:
     # Ensure required keys
     for k in ['correctness','code_quality','scientific_validity','token_efficiency','scalar_score','justification']:
