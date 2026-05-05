@@ -11,9 +11,14 @@ TRIAL_DIR="${3:-sandbox}"
 mkdir -p "$TRIAL_DIR"
 
 # ─── Discover skills ───────────────────────────────────────────────
-# Use keyword filtering based on goal content (falls back to all skills if no match)
-SKILL_FLAGS=$(bash bin/filter_skills.sh "$GOAL_FILE" skills-in-progress)
-echo "[SKILLS] Loaded: $(echo "$SKILL_FLAGS" | tr '\n' ' ')"
+if [ "${NO_SKILLS:-0}" = "1" ]; then
+    SKILL_FLAGS=""
+    echo "[SKILLS] DISABLED (NO_SKILLS=1)"
+else
+    # Use keyword filtering based on goal content (falls back to all skills if no match)
+    SKILL_FLAGS=$(bash bin/filter_skills.sh "$GOAL_FILE" skills-in-progress)
+    echo "[SKILLS] Loaded: $(echo "$SKILL_FLAGS" | tr '\n' ' ')"
+fi
 
 # ─── Model override ────────────────────────────────────────────────
 PI_MODEL="${PI_MODEL:-}"

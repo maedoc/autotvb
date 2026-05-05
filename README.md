@@ -87,8 +87,8 @@ TVB was chosen as the validation domain for specific reasons:
 
 | Tier | Count | Source | Status |
 |---|---|---|---|
-| Tutorial goals | 20 | TVB documentation examples | Baselined: avg ~3.8/5.0 |
-| Paper-grounded goals | 10 | Published TVB studies (Jirsa, Falcon, Stefanovski, etc.) | Unvalidated (infrastructure bugs) |
+| Tutorial goals | 20 | TVB documentation examples | Baselined: avg ~3.8/5.0 (no skills) → 4.50/5.0 (with skills) |
+| Paper-grounded goals | 10 | Published TVB studies (Jirsa, Falcon, Stefanovski, etc.) | Evaluated: avg ~4.17/5.0 (no skills) → 4.46/5.0 (with skills) |
 | Clinical validation | future | Patient-specific TVB outputs | Not started |
 
 The 10 paper-grounded goals span epilepsy, stroke, Alzheimer's, depression, schizophrenia, tumor resection, tDCS, and parameter space exploration — a broad test of whether skills transfer across clinical applications within the same domain.
@@ -109,37 +109,85 @@ Our evaluator was downvoting correct code because it believed `sim.run()` return
 
 ### Frontier models don't need skills as much
 
-On well-documented tasks (tutorial goals), frontier models score 4.5–5.0 without skills. Skills help most on edge cases and unfamiliar APIs. This is expected — the real test is whether skills close the gap for small models.
+On well-documented tasks (tutorial goals), frontier models score 4.5–5.0 without skills. Skills help most on edge cases and unfamiliar APIs. This is expected — the real test is whether skills close the gap for small models. The ablation study confirmed this: kimi-1T gains only +0.09 from skills, while ministral-14B gains +0.39.
+
+### Skills can over-constrain large models
+
+The ablation study revealed an unexpected finding: skills hurt scientific validity for large models (gemma4-31b: −0.32, qwen3.6: −0.48, kimi-1T: −0.31). The skills nudge models toward canonical TVB patterns that are correct but uncreative. Large models produce better scientific analysis when given freedom; skills reduce that freedom.
+
+### 8B models can't exploit skill context
+
+rnj-1 (8B) gained only +0.08 from skills despite the skills containing targeted, high-leverage TVB API facts. The model lacks the capacity to follow the multi-turn tool-use protocol with 22KB of skill context — it produces empty or garbled output. Skills as payload have a minimum model-size threshold.
 
 ### The autonomous mutation loop is premature
 
 ~95% of measured improvement came from manual skill engineering (identifying failure patterns, writing targeted skills). The mutation-selection loop contributed ~5%. The loop may become valuable for fine-tuning skills once baseline coverage is sufficient, but capability-building still requires human pattern recognition.
 
+### Cloud API rate limits are a real constraint
+
+Running 108 concurrent trials across 6 models hit API rate limits hard. Limiting to 3–4 concurrent requests was essential. The full ablation took ~12 hours of wall-clock time with that throttle. Batch experiment design must account for API capacity, not just GPU capacity.
+
 ## Key Metrics
 
 | Metric | Value |
 |---|---|
-| Active skills | 14 (driver: 10, navigator: 4) |
+| Active skills | 18 (driver: 14, navigator: 4) |
+| Skill payload | ~41KB total, ~22KB per goal (filtered) |
 | Benchmark goals | 30 (20 tutorial + 10 paper-grounded) |
-| Tutorial baseline | ~3.8/5.0 (best: 5.0) |
-| Paper-goal baseline | Not yet measured |
-| Skill payload per goal | ~22KB (filtered from 38KB total) |
-| Small-model scores | Not yet measured |
+| Best single score | 5.0/5.0 (analyze-power-spectra, using-your-own-connectivity) |
+| Batch 3 avg (kimi + skills) | 4.50/5.0 across 24 goals |
 
-## The Multi-Model Benchmark (Next Step)
+## Multi-Model Ablation Study
 
-The critical experiment: **run the same benchmark goals across a range of model sizes, with and without skills, and measure the score delta.**
+The critical experiment: **run the same benchmark goals across a range of model sizes, with and without skills, and measure the score delta.** 9 shared goals were evaluated across 6 models (8B to 1T), each in with-skills and without-skills conditions (108 total trials).
 
-| Model | Size | With Skills | Without Skills | Delta |
+### Overall Scores
+
+| Model | Params | Without Skills | With Skills | Skill Δ |
 |---|---|---|---|---|
-| kimi-k2.6 (cloud) | — | ? | ? | ? |
-| deepseek-v4-flash (cloud) | — | ? | ? | ? |
-| qwen3.6 | 23B | ? | ? | ? |
-| gemma4 | 26B | ? | ? | ? |
-| gemma4:e4b | 4B | ? | ? | ? |
-| qwen3.5:9b | 9B | ? | ? | ? |
+| rnj-1 | 8B | 4.11 | 4.19 | +0.08 |
+| ministral-3 | 14B | 4.25 | 4.64 | **+0.39** |
+| gpt-oss | 20B | 4.58 | 4.66 | +0.07 |
+| gemma4 | 31B | 4.75 | 4.72 | −0.03 |
+| qwen3.6 | 35B | 4.57 | 4.47 | −0.10 |
+| kimi-k2.6 | 1T | 4.47 | 4.56 | +0.09 |
 
-If the delta (with skills − without skills) is large for small models and small for large models, the thesis is validated: skills are the mechanism for transferring frontier-model domain expertise to local models.
+### Per-Dimension Breakdown
+
+| Model | Params | C (ws/ns) | Q (ws/ns) | S (ws/ns) | T (ws/ns) |
+|---|---|---|---|---|---|
+| rnj-1 | 8B | 4.25 / 4.00 | 4.25 / 4.22 | 4.25 / 4.33 | 4.00 / 3.89 |
+| ministral-3 | 14B | 4.71 / 3.86 | 4.71 / 4.43 | 4.71 / 4.57 | 4.43 / 4.14 |
+| gpt-oss | 20B | 4.62 / 4.78 | 4.62 / 4.67 | 4.88 / 4.56 | 4.50 / 4.33 |
+| gemma4 | 31B | 5.00 / 4.86 | 5.00 / 5.00 | 4.25 / 4.57 | 4.62 / 4.57 |
+| qwen3.6 | 35B | 4.88 / 4.57 | 4.62 / 4.57 | 4.38 / 4.86 | 4.00 / 4.29 |
+| kimi-k2.6 | 1T | 4.89 / 4.38 | 4.78 / 4.38 | 4.44 / 4.75 | 4.11 / 4.38 |
+
+C = correctness, Q = code quality, S = scientific validity, T = token efficiency. ws = with skills, ns = without skills.
+
+### Key Findings
+
+1. **Skills help most at 14B**: ministral-3 gained +0.39 overall, +0.86 on correctness. This is the strongest evidence for the thesis — a mid-size model benefits most from domain expertise compression.
+
+2. **Large models don't need skills for code quality**: gemma4-31b scores 5.00/5.00 on both code dimensions regardless of skills. The benefit is zero because the model already writes clean code.
+
+3. **Skills hurt scientific validity for large models**: gemma4 (−0.32), qwen3.6 (−0.48), and kimi-1T (−0.31) all score lower on scientific validity with skills. The skills may be **over-constraining** large models — nudging them toward canonical TVB patterns at the cost of creative, domain-appropriate analysis.
+
+4. **8B models can't use skills well**: rnj-1 gained only +0.08 despite skills containing targeted TVB API facts. The model lacks the capacity to follow multi-turn tool-use protocols with 22KB of skill context.
+
+5. **Frontier model WITHOUT skills (4.47) is beatable**: gemma4-31b without skills scores 4.75 and ministral-3 with skills scores 4.64 — both exceed kimi-1T without skills. Skills partially close the gap but model capability matters more.
+
+### What This Means for the Thesis
+
+The thesis — *"small models with skills match frontier models without them"* — is **partially validated**:
+
+- ✅ Skills provide a large benefit to mid-size models (14B: +0.39)
+- ✅ Skills improve correctness across most models (especially 14B: +0.86)
+- ❌ Skills over-constrain large models on scientific validity
+- ❌ 8B models lack capacity to exploit skill context
+- ❌ Model capability dominates: gemma4-31b without skills (4.75) > kimi-1T without skills (4.47)
+
+The refined claim: **skills are a 14–31B sweet spot technology** — they compress domain expertise into a form that mid-size models can exploit for correctness gains, but they're not yet a substitute for raw model capability at the extremes.
 
 ## Broader Applicability
 
