@@ -27,7 +27,9 @@ SLIM_SKILLS="--skill skills-in-progress/driver/small-model-essentials --skill sk
 
 declare -A GOAL_FILES
 for g in "${GOALS[@]}"; do
-    f=$(find benchmarks -name "${g}.GOAL.md" 2>/dev/null | head -n1)
+    # Prefer abstract goals (no class hints), fall back to original
+    f="benchmarks/goals_abstract/${g}.GOAL.md"
+    [ -f "$f" ] || f=$(find benchmarks -name "${g}.GOAL.md" 2>/dev/null | head -n1)
     [ -z "$f" ] && f=$(find benchmarks -name "$(echo $g | tr '_' '-').GOAL.md" 2>/dev/null | head -n1)
     [ -n "$f" ] && GOAL_FILES[$g]="$f" || echo "WARN: no goal file for $g"
 done
