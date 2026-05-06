@@ -137,57 +137,56 @@ Running 108 concurrent trials across 6 models hit API rate limits hard. Limiting
 | Best single score | 5.0/5.0 (analyze-power-spectra, using-your-own-connectivity) |
 | Batch 3 avg (kimi + skills) | 4.50/5.0 across 24 goals |
 
-## Multi-Model Ablation Study
+## Evaluator Quality
 
-The critical experiment: **run the same benchmark goals across a range of model sizes, with and without skills, and measure the score delta.** 9 shared goals were evaluated across 6 models (8B to 1T), each in with-skills and without-skills conditions (108 total trials).
+**⚠️ Previous scores were self-evaluated** — the generating model also evaluated its own output, inflating baselines and masking skill effects. All results below use an **independent frontier evaluator** (kimi-k2.6) with absolute scoring anchors applied identically across all conditions.
 
-### Overall Scores
+## Multi-Model Ablation Study (v2 — independent evaluator)
 
-| Model | Params | Without Skills | With Skills | Skill Δ |
-|---|---|---|---|---|
-| rnj-1 | 8B | 4.11 | 4.19 | +0.08 |
-| ministral-3 | 14B | 4.25 | 4.64 | **+0.39** |
-| gpt-oss | 20B | 4.58 | 4.66 | +0.07 |
-| gemma4 | 31B | 4.75 | 4.72 | −0.03 |
-| qwen3.6 | 35B | 4.57 | 4.47 | −0.10 |
-| kimi-k2.6 | 1T | 4.47 | 4.56 | +0.09 |
+The critical experiment: **run the same benchmark goals across a range of model sizes, with and without skills, and measure the score delta.** 9 shared goals evaluated with kimi-k2.6 frontier evaluator.
 
-### Per-Dimension Breakdown
+### Overall Scores (kimi-k2.6 frontier evaluator)
 
-| Model | Params | C (ws/ns) | Q (ws/ns) | S (ws/ns) | T (ws/ns) |
-|---|---|---|---|---|---|
-| rnj-1 | 8B | 4.25 / 4.00 | 4.25 / 4.22 | 4.25 / 4.33 | 4.00 / 3.89 |
-| ministral-3 | 14B | 4.71 / 3.86 | 4.71 / 4.43 | 4.71 / 4.57 | 4.43 / 4.14 |
-| gpt-oss | 20B | 4.62 / 4.78 | 4.62 / 4.67 | 4.88 / 4.56 | 4.50 / 4.33 |
-| gemma4 | 31B | 5.00 / 4.86 | 5.00 / 5.00 | 4.25 / 4.57 | 4.62 / 4.57 |
-| qwen3.6 | 35B | 4.88 / 4.57 | 4.62 / 4.57 | 4.38 / 4.86 | 4.00 / 4.29 |
-| kimi-k2.6 | 1T | 4.89 / 4.38 | 4.78 / 4.38 | 4.44 / 4.75 | 4.11 / 4.38 |
+| Model | Params | Condition | N | Mean | Skill Δ |
+|---|---|---|:---:|---:|---:|
+| rnj-1 | 8B (cloud) | zero_shot | 8 | 3.75 | |
+| | | one_shot | 8 | 3.81 | +0.06 |
+| | | with_skills | 9 | 3.94 | **+0.19** |
+| ministral-3 | 14B (cloud) | zero_shot | 7 | 4.21 | |
+| | | one_shot | 7 | 3.79 | −0.43 |
+| | | with_skills | 7 | 4.39 | **+0.18** |
+| gpt-oss | 20B (cloud) | with_skills | 4 | 4.06 | — |
 
-C = correctness, Q = code quality, S = scientific validity, T = token efficiency. ws = with skills, ns = without skills.
+### Key Findings (independent evaluator)
 
-### Key Findings
+1. **Skills help most on correctness**: rnj-1 correctness goes from 3.9 → 4.4 with skills; ministral-3 from 4.4 → 4.6.
 
-1. **Skills help most at 14B**: ministral-3 gained +0.39 overall, +0.86 on correctness. This is the strongest evidence for the thesis — a mid-size model benefits most from domain expertise compression.
+2. **One-shot can hurt**: Showing a reference notebook to ministral-3 dropped scores by 0.43. The reference distracts or constrains the model rather than helping.
 
-2. **Large models don't need skills for code quality**: gemma4-31b scores 5.00/5.00 on both code dimensions regardless of skills. The benefit is zero because the model already writes clean code.
+3. **Evaluator quality controls everything**: The self-evaluated scores claimed rnj-1 gained +0.08 from skills; independent evaluation shows +0.19. The evaluator must be independent and consistent.
 
-3. **Skills hurt scientific validity for large models**: gemma4 (−0.32), qwen3.6 (−0.48), and kimi-1T (−0.31) all score lower on scientific validity with skills. The skills may be **over-constraining** large models — nudging them toward canonical TVB patterns at the cost of creative, domain-appropriate analysis.
+4. **Goal templates leak domain knowledge**: Tutorial goals explicitly name TVB classes (`models.Generic2dOscillator`, `coupling.Difference`), making "zero_shot" effectively template-guided assembly. See §Local Model Experiment below for goals without class hints.
 
-4. **8B models can't use skills well**: rnj-1 gained only +0.08 despite skills containing targeted TVB API facts. The model lacks the capacity to follow multi-turn tool-use protocols with 22KB of skill context.
+## Local rnj-1:8b Experiment (32K context)
 
-5. **Frontier model WITHOUT skills (4.47) is beatable**: gemma4-31b without skills scores 4.75 and ministral-3 with skills scores 4.64 — both exceed kimi-1T without skills. Skills partially close the gap but model capability matters more.
+Using the **local** rnj-1:8b (not cloud) with its constrained 32K context window. Slim skills (9.7KB — essentials + boilerplate + simulation-duration) replace the full 36KB skill set which exceeded the context window. Evaluator: kimi-k2.6 with absolute scoring anchors.
 
-### What This Means for the Thesis
+### Results
 
-The thesis — *"small models with skills match frontier models without them"* — is **partially validated**:
+| Condition | N | Mean | Correctness | Code Qual | Scientific | Token Eff |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| zero_shot (template goals) | 9 | 4.17 | 4.7 | 4.0 | 4.2 | 3.8 |
+| with_skills | 9 | 4.53 | 5.0 | 4.6 | 4.7 | 3.9 |
+| **Skill Δ** | | **+0.36** | +0.3 | +0.6 | +0.5 | +0.1 |
 
-- ✅ Skills provide a large benefit to mid-size models (14B: +0.39)
-- ✅ Skills improve correctness across most models (especially 14B: +0.86)
-- ❌ Skills over-constrain large models on scientific validity
-- ❌ 8B models lack capacity to exploit skill context
-- ❌ Model capability dominates: gemma4-31b without skills (4.75) > kimi-1T without skills (4.47)
+Skills help across ALL dimensions, especially code quality (+0.6) and scientific validity (+0.5). Largest gains on domain-heavy goals: analyze_power_spectra (+1.00), schizophrenia_nrg1_ei (+0.75), stroke_sj3d_bold (+0.75).
 
-The refined claim: **skills are a 14–31B sweet spot technology** — they compress domain expertise into a form that mid-size models can exploit for correctness gains, but they're not yet a substitute for raw model capability at the extremes.
+### What This Means
+
+- ✅ **Slim skills work**: An 8B model with 32K context can use skills effectively IF the payload fits (≤10KB)
+- ✅ **Skills close the gap**: +0.36 is nearly double the cloud baseline (+0.19) — proper skill sizing matters
+- ⚠️ **Template goals inflate baselines**: The 4.17 zero_shot is from goals that name TVB classes explicitly. True zero_shot with higher-level goals is the next test.
+- ⚠️ **Minor over-constraining**: 2/9 goals showed small regressions (−0.25) where skills caused code bloat
 
 ## Broader Applicability
 
