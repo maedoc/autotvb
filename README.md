@@ -185,8 +185,39 @@ Skills help across ALL dimensions, especially code quality (+0.6) and scientific
 
 - ✅ **Slim skills work**: An 8B model with 32K context can use skills effectively IF the payload fits (≤10KB)
 - ✅ **Skills close the gap**: +0.36 is nearly double the cloud baseline (+0.19) — proper skill sizing matters
-- ⚠️ **Template goals inflate baselines**: The 4.17 zero_shot is from goals that name TVB classes explicitly. True zero_shot with higher-level goals is the next test.
+- ⚠️ **Template goals inflate baselines**: The 4.17 zero_shot is from goals that name TVB classes explicitly. See §Abstract Goals below
 - ⚠️ **Minor over-constraining**: 2/9 goals showed small regressions (−0.25) where skills caused code bloat
+
+## Abstract Goals — True Zero-Shot
+
+Goals rewritten as natural human questions with **no TVB class hints** (no backtick-quoted `models.Generic2dOscillator`, `coupling.Difference`, etc.). Tests whether the model can discover the TVB API vs. following a recipe.
+
+### rnj-1:8b — Abstract Goals
+
+| | zero_shot | with_skills |
+|---|---|---|
+| **Success rate** | 3/9 (33%) | 6/9 (67%) |
+| Successful mean score | 3.00 | 3.25 |
+| **All-goals mean** (failures=0) | **1.00** | **2.17** |
+
+Skills **double the success rate** (33% → 67%) and more than double the overall score. The model cannot even attempt 6/9 goals without domain knowledge.
+
+| goal | zero_shot | with_skills |
+|------|:---:|:---:|
+| analyze_power_spectra | 4.25 | **4.75** |
+| compare_connectivity_normalization | 3.75 | *failed* |
+| multiple_stimuli | 1.00 | **2.75** |
+| simulate_region_stimulus | *failed* | **3.00** |
+| stochastic_simulation | *failed* | **2.75** |
+| stroke_sj3d_bold | *failed* | **3.50** |
+| visual_erp | *failed* | **2.75** |
+| exploring_the_bold_monitor | *failed* | *failed* |
+| schizophrenia_nrg1_ei | *failed* | *failed* |
+
+### Why some goals still fail
+
+- **BOLD monitor**: requires hemodynamic response knowledge not in slim skills. Needs a dedicated BOLD validation skill.
+- **Schizophrenia NRG1**: too complex for 8B — requires multi-parameter genotype modeling. The full skill set (36KB) might help but exceeds the 32K context window.
 
 ## Broader Applicability
 
