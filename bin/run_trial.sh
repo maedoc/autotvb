@@ -7,6 +7,7 @@ set -uo pipefail
 echo "=== TVB Meta-Workflow: Single Trial ==="
 GOAL_FILE="${1:-benchmarks/goals/visual_erp.GOAL.md}"
 MAX_TURNS="${2:-20}"
+MAX_FIX_RETRIES="${MAX_FIX_RETRIES:-2}"
 TRIAL_DIR="${3:-sandbox}"
 mkdir -p "$TRIAL_DIR"
 
@@ -14,6 +15,9 @@ mkdir -p "$TRIAL_DIR"
 if [ "${NO_SKILLS:-0}" = "1" ]; then
     SKILL_FLAGS=""
     echo "[SKILLS] DISABLED (NO_SKILLS=1)"
+elif [ -n "${SKILL_FLAGS_OVERRIDE:-}" ]; then
+    SKILL_FLAGS="$SKILL_FLAGS_OVERRIDE"
+    echo "[SKILLS] Override: $(echo "$SKILL_FLAGS" | grep -o '\-\-skill [^ ]*' | wc -l) skills"
 else
     # Use keyword filtering based on goal content (falls back to all skills if no match)
     SKILL_FLAGS=$(bash bin/filter_skills.sh "$GOAL_FILE" skills-in-progress)
@@ -47,15 +51,49 @@ $(cat "$GOAL_FILE")
 Read the goal in $TRIAL_DIR/GOAL.md and create a new notebook $RESULT_NOTEBOOK that implements the expected output. Do NOT execute it yet; report what you plan to implement.
 NAVINIT
 
+# ─── Prompt variant selection ─────────────────────────────────────
+PROMPT_VARIANT="${PROMPT_VARIANT:-default}"
+DRIVER_ROLE="prompts/driver/role.md"
+NAVIGATOR_ROLE="prompts/navigator/role.md"
+if [ "$PROMPT_VARIANT" = "zero_shot" ]; then
+    DRIVER_ROLE="prompts/driver/role_zero_shot.md"
+    echo "[PROMPT] Using ZERO-SHOT driver prompt (no TVB API rules)"
+elif [ "$PROMPT_VARIANT" = "one_shot" ]; then
+    DRIVER_ROLE="prompts/driver/role_zero_shot.md"
+    echo "[PROMPT] Using ONE-SHOT driver prompt (zero-shot + reference notebook)"
+fi
+
+# ─── One-shot reference notebook injection ───────────────────────
+ONE_SHOT_NOTE=""
+if [ "${ONE_SHOT:-0}" = "1" ]; then
+    GOAL_BASENAME="$(basename "$GOAL_FILE" .GOAL.md)"
+    # Try to find a reference notebook
+    REF_NB="benchmarks/reference_notebooks/${GOAL_BASENAME}.ipynb"
+    # Fallback: use any existing with_skills notebook from batch3
+    if [ ! -f "$REF_NB" ]; then
+        BATCH3_DIR="sandbox/batch_all_20260503_175853"
+        HYP="$(echo "$GOAL_BASENAME" | tr '_' '-')"
+        FALLBACK="${BATCH3_DIR}/${HYP}/workflow.ipynb"
+        [ -f "$FALLBACK" ] && REF_NB="$FALLBACK"
+    fi
+    if [ -f "$REF_NB" ]; then
+        ONE_SHOT_NOTE="\n\n## Reference Notebook\nYou may examine ${REF_NB} for a working example of a TVB notebook structure, but you must write your OWN implementation for THIS specific goal. Do NOT copy the reference verbatim; adapt it to the current goal."
+        echo "[ONE_SHOT] Reference: $REF_NB"
+    else
+        echo "[ONE_SHOT] WARNING: No reference notebook found for $GOAL_BASENAME"
+    fi
+fi
+
 # ─── Build base prompts ──────────────────────────────────────────
-DRIVER_PROMPT="$(cat prompts/driver/role.md)
+DRIVER_PROMPT_BASE=$(cat "$DRIVER_ROLE")
+DRIVER_PROMPT="${DRIVER_PROMPT_BASE}
 
 IMPORTANT ENVIRONMENT NOTE:
 - TVB is installed in a Python venv at /tmp/tvb_env.
 - Before executing any TVB code, run: source /tmp/tvb_env/bin/activate
 - If TVB import fails, activate the venv first.
-- Do NOT execute the notebook inside the same pi turn that writes it. Write first, then wait for execution results."
-NAVIGATOR_PROMPT="$(cat prompts/navigator/role.md)"
+- Do NOT execute the notebook inside the same pi turn that writes it. Write first, then wait for execution results.${ONE_SHOT_NOTE}"
+NAVIGATOR_PROMPT=$(cat "$NAVIGATOR_ROLE")
 
 # ─── Helper: execute notebook locally ──────────────────────────────
 execute_notebook() {
@@ -150,6 +188,12 @@ $(cat "$EXEC_LOG" 2>/dev/null | tail -100)
 If Error: fix the notebook. If Success: verify outputs are correct.
 EOF
 
+    # ─── Retry guard ─────────────────────────────────────────────
+    if [ $turn -gt $MAX_FIX_RETRIES ] && [ "$EXEC_STATUS" = "Error" ]; then
+        echo "[DRIVER] Max fix retries ($MAX_FIX_RETRIES) reached. Preserving last notebook and exiting."
+        break
+    fi
+
     # ─── DRIVER FIX/REPORT turn ──────────────────────────────────
     echo "[DRIVER] Reviewing execution results..."
     timeout --foreground -k 30 300 pi \
@@ -187,15 +231,12 @@ echo "Turns used: $turn"
 log_resources "trial_end"
 
 # ─── EVALUATION ─────────────────────────────────────────────────
+# BUGFIX: Do NOT evaluate during generation — this caused self-evaluation contamination.
+# Evaluation is now a separate pipeline step run by run_ablation_batch.sh Phase 3.
+# The generated notebook is saved but NOT scored here.
 if [ -f "$RESULT_NOTEBOOK" ]; then
-    echo "[EVAL] Running evaluator..."
-    bash bin/evaluate.sh "$RESULT_NOTEBOOK" "$GOAL_FILE" "$TRIAL_DIR/evaluation.json" > "$TRIAL_DIR/eval.log" 2>&1 || true
-    if [ -f "$TRIAL_DIR/evaluation.json" ]; then
-        score=$(jq -r '.scalar_score // "N/A"' "$TRIAL_DIR/evaluation.json" 2>/dev/null)
-        echo "[EVAL] Score: $score"
-    else
-        echo "[EVAL] Failed — no evaluation.json produced"
-    fi
+    echo "[EVAL] Skipped inline evaluation (self-eval contamination fix). Notebook saved to $RESULT_NOTEBOOK"
+    echo "BATCH_TRIAL_DONE" >> "$TRIAL_DIR/trial.log"
 else
-    echo "[EVAL] Skipped — no notebook found"
+    echo "[EVAL] No notebook generated."
 fi

@@ -208,7 +208,11 @@ for model_spec in "${MODEL_SPECS[@]}"; do
         for g in "${GOAL_NAMES[@]}"; do
             dir="$BATCH_ROOT/$model_name/$condition/$g"
             [ -f "$dir/workflow.ipynb" ] || continue
-            [ -f "$dir/evaluation.json" ] && [ -s "$dir/evaluation.json" ] && continue
+            
+            # BUGFIX: Always evaluate with frontier model — never skip.
+            # Previous guard "[ -f evaluation.json ] && continue" blocked frontier eval
+            # because self-evaluation had already written evaluation.json during generation.
+            # Now we ALWAYS evaluate, overwriting any self-eval that snuck through.
             
             PI_MODEL=$EVAL_MODEL bash bin/evaluate.sh \
                 "$dir/workflow.ipynb" "$dir/GOAL.md" "$dir/evaluation.json" \

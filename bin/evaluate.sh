@@ -16,79 +16,54 @@ GOAL="${2:-benchmarks/goals/visual_erp.GOAL.md}"
 TRIAL_DIR="$(dirname "$(realpath "$NOTEBOOK")")"
 RESULT_FILE="${3:-$TRIAL_DIR/evaluation.json}"
 
-# ─── Resource snapshot helper ──────────────────────────────────────
-log_eval_resources() {
-    local label="$1"
-    local ts
-    ts=$(date -Iseconds)
-    local loadavg
-    loadavg=$(cat /proc/loadavg 2>/dev/null | awk '{print $1}' || echo "null")
-    local mem_avail
-    mem_avail=$(grep MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "null")
-    local rss_kb
-    rss_kb=$(ps -o rss= -p $$ 2>/dev/null | tr -d ' ' || echo "null")
-    local pi_count pi_rss
-    pi_count=$(ps -eo comm | grep -cx 'pi' 2>/dev/null || echo "0")
-    pi_rss=$(ps -eo rss,comm | awk '$2=="pi" {sum+=$1} END {print sum+0}' 2>/dev/null || echo "0")
-    cat >> "$TRIAL_DIR/resources.log" <<JSON
-{"timestamp":"$ts","label":"$label","loadavg_1m":$loadavg,"mem_avail_kb":$mem_avail,"proc_rss_kb":$rss_kb,"pi_procs":$pi_count,"pi_rss_kb":$pi_rss}
-JSON
-echo "" >> "$TRIAL_DIR/resources.log"
-}
-
-log_eval_resources "eval_start"
-
 GOAL_TEXT=$(cat "$GOAL")
 
-# Convert notebook to script for inspection
-NB_SCRIPT="$TRIAL_DIR/workflow.py"
-python -m nbconvert --to python "$NOTEBOOK" --output "$TRIAL_DIR/workflow.py" >/dev/null 2>&1 || true
+# ─── Extract code cells only (strips markdown, outputs, metadata) ──
+NB_TEXT=$(python3 -c "
+import json
+nb = json.load(open('$NOTEBOOK'))
+src = []
+for c in nb.get('cells', []):
+    if c.get('cell_type') == 'code':
+        s = ''.join(c.get('source', []))
+        src.append(s)
+text = chr(10).join(src)
+# 100K cap is generous — kimi has 262K context, code is most of signal
+print(text[:100000])
+" 2>/dev/null || echo "EXTRACTION FAILED")
 
-# nbconvert may produce workflow.py.py or .txt rather than .py
-if [ ! -f "$NB_SCRIPT" ] && [ -f "$TRIAL_DIR/workflow.py.py" ]; then
-    NB_SCRIPT="$TRIAL_DIR/workflow.py.py"
-fi
-if [ ! -f "$NB_SCRIPT" ] && [ -f "$TRIAL_DIR/workflow.txt" ]; then
-    NB_SCRIPT="$TRIAL_DIR/workflow.txt"
-fi
+EVAL_TIMEOUT=${EVAL_TIMEOUT:-120}
 
-NB_TEXT=$(if [ -f "$NB_SCRIPT" ]; then cat "$NB_SCRIPT"; else echo "NOTEBOOK NOT FOUND"; fi)
-
-EVAL_TIMEOUT=${EVAL_TIMEOUT:-180}
-
-# Truncate overly long notebooks to prevent evaluator context overflow
-NB_LEN=${#NB_TEXT}
-MAX_NB_LEN=15000
-if [ "$NB_LEN" -gt "$MAX_NB_LEN" ]; then
-    TRUNCATED_LEN=12000
-    NB_TEXT=$(printf '%s' "$NB_TEXT" | head -c "$TRUNCATED_LEN")
-    NB_TEXT="${NB_TEXT}"$'\n\n# [... NOTEBOOK TRUNCATED: '"$NB_LEN"' characters total, showing first '"$TRUNCATED_LEN"'. Complete notebook: '"$NB_SCRIPT"' ...]\n'
-    echo "WARNING: Notebook too large ($NB_LEN chars), truncated to $TRUNCATED_LEN for evaluation" >&2
-fi
-
-# Build prompt — use single-quoted heredoc to avoid shell expansion of API examples
-cat > "$TRIAL_DIR/.eval_prompt.txt" <<'PRMPT'
-You are an independent scientific reviewer evaluating Jupyter notebooks for The Virtual Brain (TVB) Python simulator.
+# ─── Build evaluator prompt ───────────────────────────────────────
+EVAL_PROMPT="${EVAL_PROMPT:-prompts/evaluator/role.md}"
+if [ -f "$EVAL_PROMPT" ]; then
+    cat "$EVAL_PROMPT" > "$TRIAL_DIR/.eval_prompt.txt"
+else
+    cat > "$TRIAL_DIR/.eval_prompt.txt" <<'PRMPT'
+You are an independent scientific reviewer evaluating Jupyter notebooks for The Virtual Brain (TVB) simulator.
 
 ### Critical TVB API Facts
-- sim.run(simulation_length=X) returns a LIST of monitor-output tuples (not a generator). It is CORRECT to unpack as: monitor1, monitor2 = sim.run(...).
-- sim() (calling the Simulator object directly) yields per-step tuples where some monitors may be None between sampling instants. List comprehension is needed for this mode.
-- Conduction speed must be set on the Connectivity object: conn.speed = numpy.array([value]) before conn.configure(). It is WRONG to pass conduction_speed to Simulator().
-- conn.scaled_weights() and conn.tract_lengths are valid Connectivity methods.
+- sim.run() returns a LIST. Correct: (t1, d1), (t2, d2) = sim.run(...).
+- conn.speed = numpy.array([v]) before conn.configure().
+- conn.scaled_weights() and conn.tract_lengths are valid methods.
 
-### Execution Evidence
-When scoring correctness, PRIORITIZE whether the notebook ACTUALLY RAN without errors. If it executed successfully, do NOT downgrade correctness for API usage you merely disagree with.
+### Absolute Scoring Anchors — Apply to EVERY notebook identically
+- correctness: code that crashes → ≤2. Runs with API errors → 3. Runs cleanly → 4-5.
+- scientific_validity: wrong model or missing metrics → ≤2. Correct but unverified → 3. Verified against output → 4-5.
+- Simulation too short for task → deduct 1-2 from scientific_validity (e.g. BOLD <120s for FC → max 3).
+- Missing markdown rationale → deduct 1 from code_quality (goal explicitly requests it).
 
-### Dimensions
-- correctness: Does the code execute? Are TVB API calls used correctly? (1-5)
-- code_quality: Readable, structured, maintainable? (1-5)
-- scientific_validity: Does the analysis answer the question with correct methods? (1-5)
-- token_efficiency: Concise without gratuitous extras? (1-5)
+### Dimensions (1-5)
+- correctness: Code executes without errors? Crashes ≤2, runs 3-4, clean 5.
+- code_quality: Readable, structured, no dead code?
+- scientific_validity: Analysis matches goal? Parameters justified?
+- token_efficiency: Concise, no repetition?
 
-Output ONLY a JSON object — no markdown, no code fences, no commentary, no trailing text. The justification MUST be under 30 words:
+Output ONLY a JSON object — no markdown, no fences. Justification ≤30 words:
 
 {"correctness": INT, "code_quality": INT, "scientific_validity": INT, "token_efficiency": INT, "scalar_score": FLOAT, "justification": "<30 words>"}
 PRMPT
+fi
 
 cat >> "$TRIAL_DIR/.eval_prompt.txt" <<EOF
 
@@ -99,6 +74,7 @@ $GOAL_TEXT
 $NB_TEXT
 EOF
 
+# ─── Evaluate ─────────────────────────────────────────────────────
 RESULT=$(timeout --foreground -k 30 "$EVAL_TIMEOUT" pi \
     --mode text \
     --no-session \
@@ -106,76 +82,48 @@ RESULT=$(timeout --foreground -k 30 "$EVAL_TIMEOUT" pi \
     -p "$(cat "$TRIAL_DIR/.eval_prompt.txt")" \
     2>"$TRIAL_DIR/.eval_stderr.txt" || true)
 
-# Save raw output immediately (stdout only; stderr already redirected)
 echo "$RESULT" > "$TRIAL_DIR/.eval_raw.txt"
 
-# Extract JSON with balanced-brace parsing and multiple fallbacks
-EVAL_RAW_PATH="$TRIAL_DIR/.eval_raw.txt" python3 <<'PY' > "$RESULT_FILE" 2>"$TRIAL_DIR/.eval_pyerr.txt"
+# ─── Extract JSON ─────────────────────────────────────────────────
+EVAL_RAW_PATH="$TRIAL_DIR/.eval_raw.txt" python3 <<'PY' > "$RESULT_FILE"
 import sys, re, json, os
 
 path = os.environ['EVAL_RAW_PATH']
 with open(path, 'r', encoding='utf-8', errors='replace') as f:
     text = f.read()
 
-# Strategy 1: find JSON between balanced braces (with tolerance for unbalanced)
 data = None
+# Strategy 1: balanced braces
 for m in re.finditer(r'\{', text):
     start = m.start()
     depth = 0
     for i in range(start, min(len(text), start + 10000)):
-        if text[i] == '{':
-            depth += 1
+        if text[i] == '{': depth += 1
         elif text[i] == '}':
             depth -= 1
             if depth == 0:
-                try:
-                    candidate = text[start:i+1]
-                    data = json.loads(candidate)
-                    break
-                except json.JSONDecodeError:
-                    continue
-    if data is not None:
-        break
+                try: data = json.loads(text[start:i+1]); break
+                except: continue
+    if data is not None: break
 
-# Strategy 2: if none found, look for simple quoted JSON block
+# Strategy 2: simple JSON block
 if data is None:
     m = re.search(r'\{[^{}]*\}', text, re.DOTALL)
     if m:
-        try:
-            data = json.loads(m.group())
-        except:
-            pass
+        try: data = json.loads(m.group())
+        except: pass
 
-# Strategy 3: truncated JSON — try appending closing braces
+# Strategy 3: regex-based extraction
 if data is None:
-    # Find the last opening brace and try to complete it
-    m = re.search(r'\{', text)
-    if m:
-        start = m.start()
-        candidate = text[start:].rstrip()
-        # Try progressively adding closing braces
-        for suffix in ['}', '"}}', '"}]}}']:
-            try:
-                data = json.loads(candidate + suffix)
-                break
-            except json.JSONDecodeError:
-                continue
-        # If still failing, try regex-based extraction of scored fields
-        if data is None:
-            scores = {}
-            for key in ['correctness','code_quality','scientific_validity','token_efficiency','scalar_score']:
-                m2 = re.search(rf'"{key}"\s*:\s*(\d+\.?\d*)', candidate)
-                if m2:
-                    scores[key] = float(m2.group(1))
-                else:
-                    scores[key] = 0
-            just_m = re.search(r'"justification"\s*:\s*"([^"]*)', candidate)
-            scores['justification'] = just_m.group(1) if just_m else 'extracted from truncated response'
-            if len(scores) == 6:
-                data = scores
+    scores = {}
+    for key in ['correctness','code_quality','scientific_validity','token_efficiency','scalar_score']:
+        m2 = re.search(rf'"{key}"\s*:\s*(\d+\.?\d*)', text)
+        scores[key] = float(m2.group(1)) if m2 else 0
+    just_m = re.search(r'"justification"\s*:\s*"([^"]*)', text)
+    scores['justification'] = just_m.group(1) if just_m else 'regex-extracted'
+    if len(scores) == 6: data = scores
 
 if data is not None:
-    # Ensure required keys
     for k in ['correctness','code_quality','scientific_validity','token_efficiency','scalar_score','justification']:
         if k not in data:
             data[k] = 0 if k != 'justification' else 'auto-fallback'
@@ -184,22 +132,19 @@ else:
     print('{}')
 PY
 
-# If extraction failed completely, keep raw for inspection
-if [ ! -s "$RESULT_FILE" ]; then
-    echo '{}' > "$RESULT_FILE"
-fi
+# ─── Fallback guard ───────────────────────────────────────────────
+if [ ! -s "$RESULT_FILE" ]; then echo '{}' > "$RESULT_FILE"; fi
 
-# Empty-eval guard: if file is empty, too small, or just {}, write fallback
 EVAL_SIZE=$(wc -c < "$RESULT_FILE" 2>/dev/null || echo 0)
 EVAL_CONTENT=$(cat "$RESULT_FILE" 2>/dev/null || echo '{}')
-if [ "$EVAL_SIZE" -lt 50 ] || [ "$EVAL_CONTENT" = '{}' ] || [ "$EVAL_CONTENT" = '' ]; then
-    cat > "$RESULT_FILE" <<'FALLBACK'
-{"correctness":0,"code_quality":0,"scientific_validity":0,"token_efficiency":5,"scalar_score":0.0,"fallback":true,"justification":"Evaluator context overflow, timeout, or empty response — notebook too large or evaluation failed. Manual review required."}
-FALLBACK
-    echo "WARNING: Empty or trivial evaluation detected ($EVAL_SIZE bytes). Wrote fallback score=0.0" >&2
-fi
+IS_REGEX_EXTRACTED=$(python3 -c "import json; d=json.load(open('$RESULT_FILE')); print(1 if d.get('justification','')=='regex-extracted' else 0)" 2>/dev/null || echo 0)
 
-log_eval_resources "eval_end"
+if [ "$EVAL_SIZE" -lt 50 ] || [ "$EVAL_CONTENT" = '{}' ] || [ "$EVAL_CONTENT" = '' ] || [ "$IS_REGEX_EXTRACTED" = "1" ]; then
+    cat > "$RESULT_FILE" <<'FALLBACK'
+{"correctness":0,"code_quality":0,"scientific_validity":0,"token_efficiency":5,"scalar_score":0.0,"fallback":true,"justification":"Evaluator context overflow, timeout, or empty response."}
+FALLBACK
+    echo "WARNING: Empty/regex-extracted eval ($EVAL_SIZE bytes). Wrote fallback." >&2
+fi
 
 echo "Evaluation written to $RESULT_FILE"
 cat "$RESULT_FILE"
