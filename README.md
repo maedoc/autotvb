@@ -219,6 +219,35 @@ Skills **double the success rate** (33% → 67%) and more than double the overal
 - **BOLD monitor**: requires hemodynamic response knowledge not in slim skills. Needs a dedicated BOLD validation skill.
 - **Schizophrenia NRG1**: too complex for 8B — requires multi-parameter genotype modeling. The full skill set (36KB) might help but exceeds the 32K context window.
 
+### qwen3.6:128k — Abstract Goals (local, 128K context)
+
+Runs the same 9 abstract goals with zero-shot vs skills, evaluated by kimi-k2.6. **Failures counted as score 0** to avoid inflating condition means.
+
+| | zero_shot | with_skills |
+|---|---|---|
+| **Notebook generated** | 4/9 (44%) | 6/9 (67%) |
+| **Per-goal mean** (failures=0) | **0.67** | **1.58** |
+| **Skill Δ** | | **+0.92** |
+
+| goal | zero_shot | with_skills | Δ |
+|------|:---:|:---:|:---:|
+| analyze_power_spectra | 1.00 | **3.00** | **+2.00** |
+| compare_connectivity_normalization | 1.75 | **2.25** | +0.50 |
+| exploring_the_bold_monitor | 2.25 | **2.50** | +0.25 |
+| multiple_stimuli | 0.00 | 0.00 | 0.00 |
+| simulate_region_stimulus | 0.00 | **2.25** | **+2.25** |
+| stochastic_simulation | 0.00 | **2.25** | **+2.25** |
+| stroke_sj3d_bold | 0.00 | 0.00 | 0.00 |
+| visual_erp | 0.00 | **2.00** | **+2.00** |
+| schizophrenia_nrg1_ei | 1.00 | 0.00 | −1.00 |
+
+**What this means**
+- ✅ **Skills rescue failed goals** — 3 goals that could not even generate a notebook in zero-shot succeeded with skills
+- ✅ **Skills raise absolute performance** — +0.92 per-goal mean, with the largest gains on API-heavy tasks (+2.0 on power-spectra, simulate_region, stochastic, visual_erp)
+- ⚠️ **Still modest absolute ceiling** — even with skills, mean score is only 1.58/5. The model produces runnable notebooks but with correctness issues (mean correctness 1.2 in both conditions)
+- ⚠️ **Complex goals still fail** — `stroke_sj3d_bold` (param sweep + lesion) and `schizophrenia_nrg1_ei` (with skills) failed, suggesting 23B-param models near their complexity limit for multi-stage tasks
+- ⚠️ **Pipeline bug discovered** — all prior ablations using `--model` were silently falling back to the default API provider. The `--model` flag was re-added to `run_trial.sh` and `evaluate.sh` to ensure local models actually run on the intended hardware
+
 ## Broader Applicability
 
 If the approach works on TVB, it should transfer to any domain where:

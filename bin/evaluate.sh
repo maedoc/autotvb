@@ -74,13 +74,26 @@ $GOAL_TEXT
 $NB_TEXT
 EOF
 
-# ─── Evaluate ─────────────────────────────────────────────────────
-RESULT=$(timeout --foreground -k 30 "$EVAL_TIMEOUT" pi \
-    --mode text \
-    --no-session \
-    --tools read,bash \
-    -p "$(cat "$TRIAL_DIR/.eval_prompt.txt")" \
-    2>"$TRIAL_DIR/.eval_stderr.txt" || true)
+# ─── Evaluate (with retry) ──────────────────────────────────────
+RESULT=""
+for attempt in 1 2 3; do
+    RESULT=$(timeout --foreground -k 30 "$EVAL_TIMEOUT" pi \
+        --mode text \
+        --no-session \
+        --model "$PI_MODEL" \
+        --tools read,bash \
+        -p "$(cat "$TRIAL_DIR/.eval_prompt.txt")" \
+        2>"$TRIAL_DIR/.eval_stderr.txt" || true)
+
+    RESULT_LEN=${#RESULT}
+    if [ "$RESULT_LEN" -ge 10 ]; then
+        echo "Evaluator responded (${RESULT_LEN} chars) on attempt ${attempt}."
+        break
+    else
+        echo "WARNING: Evaluator empty/short on attempt ${attempt} (${RESULT_LEN} chars). Retrying..." >&2
+        sleep 10
+    fi
+done
 
 echo "$RESULT" > "$TRIAL_DIR/.eval_raw.txt"
 

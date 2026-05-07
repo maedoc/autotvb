@@ -152,6 +152,7 @@ for turn in $(seq 1 "$MAX_TURNS"); do
     timeout --foreground -k 30 300 pi \
         --mode text \
         --no-session \
+        --model "$PI_MODEL" \
         --tools read,bash,write,edit \
         $SKILL_FLAGS \
         --system-prompt "$DRIVER_PROMPT" \
@@ -199,6 +200,7 @@ EOF
     timeout --foreground -k 30 300 pi \
         --mode text \
         --no-session \
+        --model "$PI_MODEL" \
         --tools read,bash,write,edit \
         $SKILL_FLAGS \
         --system-prompt "$DRIVER_PROMPT" \
@@ -210,6 +212,7 @@ EOF
     timeout --foreground -k 30 300 pi \
         --mode text \
         --no-session \
+        --model "$PI_MODEL" \
         --tools read,bash \
         $SKILL_FLAGS \
         --system-prompt "$NAVIGATOR_PROMPT" \
