@@ -248,6 +248,38 @@ Runs the same 9 abstract goals with zero-shot vs skills, evaluated by kimi-k2.6.
 - ⚠️ **Complex goals still fail** — `stroke_sj3d_bold` (param sweep + lesion) and `schizophrenia_nrg1_ei` (with skills) failed, suggesting 23B-param models near their complexity limit for multi-stage tasks
 - ⚠️ **Pipeline bug discovered** — all prior ablations using `--model` were silently falling back to the default API provider. The `--model` flag was re-added to `run_trial.sh` and `evaluate.sh` to ensure local models actually run on the intended hardware
 
+## Cloud Model Single-Goal Drilldown
+
+To compare cloud model performance on a single, representative goal before committing to full-batch runs, both **gemma4:31b-cloud** and **ministral-3:14b-cloud** were tested on `analyze_power_spectra` with zero-shot vs skills. Evaluator: **kimi-k2.6** frontier model.
+
+### Performance
+
+| Model | Params | Condition | scalar_score | correctness | code_quality | scientific_validity | token_efficiency |
+| :--- | ---:|:---|---:|---:|---:|---:|---:|
+| **gemma4:31b-cloud** | 31B (cloud) | zero_shot | 1.00 | 1 | 1 | 1 | 1 |
+| | | with_skills | 2.00 | 1 | 2 | 2 | 3 |
+| **ministral-3:14b-cloud** | 14B (cloud) | zero_shot | 1.00 | 1 | 1 | 1 | 1 |
+| | | **with_skills** | **4.75** | **5** | **5** | **5** | **4** |
+
+### What Happened
+
+| Model | Condition | Outcome |
+| :--- | :--- | :--- |
+| **gemma4:31b** | zero_shot | Wrote a **prose markdown file**, not a valid `.ipynb` JSON. The `write` tool was invoked but with markdown content instead of notebook cells. |
+| **gemma4:31b** | with_skills | Notebook was **valid JSON** (the `notebook-format` skill auto-injected by `filter_skills.sh` corrected the structure), but still made API errors: `sim.run()` unpacked as `(t, data)` — a tuple of two arrays — when TVB returns **a list of tuples** `(t1, d1), (t2, d2) = sim.run(...)`. |
+| **ministral-14b** | zero_shot | Same prose-format failure as gemma4. |
+| **ministral-14b** | with_skills | Near-perfect: correct `sim.run()` unpacking, rigorous Welch PSD analysis, peak annotation, scientific interpretation of alpha-band dominance. Only deduction: a brief FC (functional connectivity) tangent that wasn't requested, reducing token efficiency from 5 → 4. |
+
+### Key Takeaways
+
+1. **Notebook-format skill is critical** — Without it, both models produce prose documents instead of executable notebooks. With it, notebooks become valid JSON and evaluable.
+
+2. **ministral-14b-cloud outperforms gemma4:31b-cloud** even with 17B fewer parameters** — 4.75 vs 2.0 on the same goal with identical skills. The ministral model appears to follow the TVB API patterns more faithfully.
+
+3. **Skills bridge format + correctness** — Zero-shot: unusable output (1.0). With skills: gemma4 becomes functional-but-buggy (2.0), ministral becomes near-expert (4.75).
+
+4. **The `sim.run()` list-return bug is persistent** — Even with skills, gemma4:31b made the same unpacking error that the `boilerplate` skill is meant to prevent. This suggests the skill's wording or placement in context may need refinement for 31B models, or that the model's attention isn't drawn to it strongly enough.
+
 ## Broader Applicability
 
 If the approach works on TVB, it should transfer to any domain where:
