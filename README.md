@@ -16,6 +16,12 @@ The key claim: **if skills are well-built, a small model with skills outperforms
 
 ## How It Works
 
+### Pipeline Overview
+
+![Pipeline Diagram](docs/pipeline_diagram.jpg)
+
+*Figure 1: The two-phase evaluation pipeline. **Phase 1** (left): a small model generates a notebook via driver/navigator multi-turn loop, with skills injected via keyword filtering into the system prompt. **Phase 2** (right): a frontier evaluator independently scores the notebook on 4 dimensions (correctness, code quality, scientific validity, token efficiency) without knowledge of the generation condition.*
+
 ### The Skill-Creation Loop
 
 ```
@@ -138,6 +144,10 @@ Running 108 concurrent trials across 6 models hit API rate limits hard. Limiting
 | Batch 3 avg (kimi + skills) | 4.50/5.0 across 24 goals |
 
 ## Evaluator Quality
+
+![Zero-Shot vs Skills Comparison](docs/comparison_diagram.jpg)
+
+*Figure 2: Architecture of the zero-shot vs skills comparison. **Zero-shot** (left): small model receives only the goal and a minimal role prompt. **With-skills** (right): the same small model receives a filtered subset of skills (~22KB) matched to the goal keywords. A frontier evaluator scores both conditions blindly, measuring the "Skill Δ" — the performance gap closed by injecting domain expertise.*
 
 **⚠️ Previous scores were self-evaluated** — the generating model also evaluated its own output, inflating baselines and masking skill effects. All results below use an **independent frontier evaluator** (kimi-k2.6) with absolute scoring anchors applied identically across all conditions.
 
